@@ -10,3 +10,8 @@ System do automatycznego pobierania danych giełdowych z GPW, analizy według st
 - `dashboard/` - Wizualizacja wykresów i alertów
 - `database/` - Schemat bazy danych (PostgreSQL)
 - `config/` - Pliki konfiguracyjne
+
+## Instrukcja
+- `git status` - Sprawdzenie aktualnych zmian w repo
+- `git commit -m "Komentarz"` - Wprowadzenie zmian w repozytorium
+- `git push origin main` - Pobranie aktualnego stanu repozytorium
