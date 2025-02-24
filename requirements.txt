@@ -1,0 +1,8 @@
+echo "pandas
+numpy
+requests
+fastapi
+uvicorn
+yfinance
+sqlalchemy
+psycopg2" > requirements.txt
