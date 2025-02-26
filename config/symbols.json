@@ -1,7 +1,6 @@
 {
   "symbols": [
-    "PKO", "PKN", "PZU", "PEO", "DNP", "SPL", "KGH", "LPP", 
-    "ALE", "CPS", "CDR", "MBK", "OPL", "MIL", "KRU", "BDX",
-    "PLY", "JSW", "WPL", "TEN", "CCC", "EAT", "OPF", "MRC"
+    "PKO", "PKN", "PZU", "PEO", "KGH", "LPP", 
+    "SPL", "ALE", "CPS", "CDR", "MBK", "DNP"
   ]
 }

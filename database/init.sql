@@ -1,3 +1,8 @@
+# Create database directory if it doesn't exist
+mkdir -p database
+
+# Create a corrected init.sql file
+cat > database/init.sql << 'EOF'
 -- Create schema for GPW Alert System
 
 -- Staging table for newly fetched data
@@ -72,3 +77,4 @@ CREATE TABLE IF NOT EXISTS backtest_results (
     parameters JSONB,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+EOF

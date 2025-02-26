@@ -5,5 +5,3 @@ yfinance
 sqlalchemy
 psycopg2
 tqdm
-fastapi
-uvicorn

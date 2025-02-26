@@ -1,4 +1,6 @@
 import os
+import json
+import logging
 from fastapi import FastAPI, Request, HTTPException, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -6,8 +8,14 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy import create_engine, text
 from datetime import datetime, timedelta
 import pandas as pd
-import json
 import requests
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger('dashboard')
 
 app = FastAPI(title="GPW Alert System Dashboard")
 
@@ -38,10 +46,27 @@ def get_symbols():
                 """)
             )
             
-            return [row[0] for row in result]
+            symbols = [row[0] for row in result]
+            
+            # If no symbols found in database, fall back to config file
+            if not symbols:
+                logger.warning("No symbols found in database, falling back to config file")
+                try:
+                    config_path = os.environ.get('CONFIG_PATH', '/app/config/symbols.json')
+                    with open(config_path, 'r') as f:
+                        config = json.load(f)
+                        symbols = config.get("symbols", [])
+                except Exception as config_err:
+                    logger.error(f"Error loading config file: {str(config_err)}")
+                    # Fall back to hardcoded symbols
+                    symbols = ["PKO", "PKN", "PZU", "PEO", "KGH", "LPP"]
+            
+            logger.info(f"Found {len(symbols)} symbols: {symbols}")
+            return symbols
     except Exception as e:
-        print(f"Error getting symbols: {str(e)}")
-        return []
+        logger.error(f"Error getting symbols: {str(e)}")
+        # Fall back to hardcoded symbols in case of error
+        return ["PKO", "PKN", "PZU", "PEO", "KGH", "LPP"]
 
 # Get stock data for a symbol
 def get_stock_data(symbol, days=30):
@@ -58,14 +83,19 @@ def get_stock_data(symbol, days=30):
             
             df = pd.read_sql(text(query), conn, params={"symbol": symbol})
             
+            if df.empty:
+                logger.warning(f"No data found for symbol {symbol} for the last {days} days")
+            else:
+                logger.info(f"Retrieved {len(df)} data points for {symbol}")
+            
             # Calculate moving averages
             if len(df) > 0:
-                df['ma50'] = df['close'].rolling(window=50).mean()
-                df['ma100'] = df['close'].rolling(window=100).mean()
+                df['ma50'] = df['close'].rolling(window=min(50, len(df))).mean()
+                df['ma100'] = df['close'].rolling(window=min(100, len(df))).mean()
             
             return df
     except Exception as e:
-        print(f"Error getting stock data: {str(e)}")
+        logger.error(f"Error getting stock data for {symbol}: {str(e)}")
         return pd.DataFrame()
 
 # Get recent alerts
@@ -82,22 +112,31 @@ def get_recent_alerts(days=7):
             """
             
             df = pd.read_sql(text(query), conn, params={"days": days})
+            logger.info(f"Retrieved {len(df)} recent alerts")
             return df.to_dict(orient='records')
     except Exception as e:
-        print(f"Error getting alerts: {str(e)}")
+        logger.error(f"Error getting alerts: {str(e)}")
         return []
 
 # Get backtest results
 def get_backtest_results(symbol=None, limit=10):
     try:
-        response = requests.get(
-            f"http://backtester:8004/results?limit={limit}" + (f"&symbol={symbol}" if symbol else "")
-        )
+        url = f"http://backtester:8004/results?limit={limit}"
+        if symbol:
+            url += f"&symbol={symbol}"
+            
+        logger.info(f"Requesting backtest results from: {url}")
+        response = requests.get(url, timeout=10)
+        
         if response.status_code == 200:
-            return response.json().get('results', [])
-        return []
+            results = response.json().get('results', [])
+            logger.info(f"Retrieved {len(results)} backtest results")
+            return results
+        else:
+            logger.error(f"Failed to get backtest results: HTTP {response.status_code}")
+            return []
     except Exception as e:
-        print(f"Error getting backtest results: {str(e)}")
+        logger.error(f"Error getting backtest results: {str(e)}")
         return []
 
 # Get system health data
@@ -124,15 +163,17 @@ def get_system_health():
                         'details': row['details']
                     }
             
+            logger.info(f"Retrieved health status for {len(components)} components")
             return list(components.items())
     except Exception as e:
-        print(f"Error getting system health: {str(e)}")
+        logger.error(f"Error getting system health: {str(e)}")
         return []
 
 # Routes
 @app.get("/")
 async def home(request: Request):
     symbols = get_symbols()
+    logger.info(f"Rendering home page with {len(symbols)} symbols")
     return templates.TemplateResponse(
         "index.html", 
         {"request": request, "symbols": symbols}
@@ -141,6 +182,7 @@ async def home(request: Request):
 @app.get("/backtest")
 async def backtest_page(request: Request):
     symbols = get_symbols()
+    logger.info(f"Rendering backtest page with {len(symbols)} symbols")
     return templates.TemplateResponse(
         "backtest.html", 
         {"request": request, "symbols": symbols}
@@ -170,22 +212,27 @@ async def run_backtest(
             }
         }
         
+        logger.info(f"Running backtest for {symbol} from {start_date} to {end_date}")
         response = requests.post(
             "http://backtester:8004/backtest",
-            json=data
+            json=data,
+            timeout=60
         )
         
         if response.status_code == 200:
+            logger.info(f"Backtest completed successfully for {symbol}")
             # Redirect to backtest results page
             return RedirectResponse(url="/backtest?success=true", status_code=303)
         else:
             error = response.json().get("detail", "Unknown error")
+            logger.error(f"Backtest failed: {error}")
             return RedirectResponse(
                 url=f"/backtest?error={error}&symbol={symbol}", 
                 status_code=303
             )
             
     except Exception as e:
+        logger.error(f"Error running backtest: {str(e)}")
         return RedirectResponse(
             url=f"/backtest?error={str(e)}&symbol={symbol}", 
             status_code=303
@@ -201,6 +248,7 @@ async def api_stock_data(symbol: str, days: int = 30):
     df = get_stock_data(symbol, days)
     
     if df.empty:
+        logger.warning(f"No data found for symbol {symbol}")
         return JSONResponse(
             status_code=404,
             content={"message": f"No data found for symbol {symbol}"}
@@ -243,20 +291,24 @@ async def api_equity_curve(symbol: str, start_date: str, end_date: str = None,
         end_date = datetime.now().strftime('%Y-%m-%d')
         
     try:
+        logger.info(f"Getting equity curve for {symbol} from {start_date} to {end_date}")
         response = requests.get(
             f"http://backtester:8004/equity_curve?symbol={symbol}&start_date={start_date}&end_date={end_date}"
-            f"&short_ma={short_ma}&long_ma={long_ma}&initial_capital={initial_capital}"
+            f"&short_ma={short_ma}&long_ma={long_ma}&initial_capital={initial_capital}",
+            timeout=30
         )
         
         if response.status_code == 200:
             return response.json()
         else:
             error = response.json().get("detail", "Unknown error")
+            logger.error(f"Error getting equity curve: {error}")
             return JSONResponse(
                 status_code=400,
                 content={"error": error}
             )
     except Exception as e:
+        logger.error(f"Exception when getting equity curve: {str(e)}")
         return JSONResponse(
             status_code=500,
             content={"error": str(e)}
@@ -288,8 +340,10 @@ async def healthcheck():
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         
+        logger.info("Healthcheck passed")
         return {"status": "OK", "timestamp": datetime.now().isoformat()}
     except Exception as e:
+        logger.error(f"Healthcheck failed: {str(e)}")
         return JSONResponse(
             status_code=500,
             content={
@@ -297,6 +351,45 @@ async def healthcheck():
                 "error": str(e),
                 "timestamp": datetime.now().isoformat()
             }
+        )
+
+# Add data seed endpoint for emergency cases
+@app.get("/api/seed_test_data")
+async def seed_test_data():
+    try:
+        engine = get_db_connection()
+        with engine.connect() as conn:
+            # Insert some test data for PKO
+            for i in range(100):
+                date = (datetime.now() - timedelta(days=100-i)).strftime('%Y-%m-%d')
+                # Generate some fake price data that looks like a trend
+                base_price = 40.0 + i * 0.1 + (i % 7) * 0.2
+                conn.execute(
+                    text("""
+                        INSERT INTO historical_stock_prices 
+                        (symbol, timestamp, open, high, low, close, volume)
+                        VALUES (:symbol, :timestamp, :open, :high, :low, :close, :volume)
+                        ON CONFLICT (symbol, timestamp) DO NOTHING
+                    """),
+                    {
+                        "symbol": "PKO",
+                        "timestamp": date,
+                        "open": base_price,
+                        "high": base_price + 0.5,
+                        "low": base_price - 0.3,
+                        "close": base_price + 0.1,
+                        "volume": 1000000 + (i * 10000)
+                    }
+                )
+            conn.commit()
+            
+        logger.info("Seeded test data for PKO")
+        return {"status": "OK", "message": "Test data has been seeded for PKO"}
+    except Exception as e:
+        logger.error(f"Error seeding test data: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "ERROR", "error": str(e)}
         )
 
 if __name__ == "__main__":

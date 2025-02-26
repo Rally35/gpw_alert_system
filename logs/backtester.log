@@ -1,0 +1,147 @@
+2025-02-26 22:43:57,409 - backtester - ERROR - Error getting backtest results: (psycopg2.errors.UndefinedTable) relation "backtest_results" does not exist
+LINE 6:                     FROM backtest_results
+                                 ^
+
+[SQL: 
+                    SELECT id, symbol, strategy, start_date, end_date, 
+                    initial_capital, final_capital, total_return, 
+                    annualized_return, total_trades, winning_trades, 
+                    win_rate, max_drawdown, sharpe_ratio, parameters, created_at
+                    FROM backtest_results
+                    ORDER BY created_at DESC
+                    LIMIT %(limit)s
+                ]
+[parameters: {'limit': 10}]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+2025-02-26 22:48:17,087 - backtester - ERROR - Error getting backtest results: (psycopg2.errors.UndefinedTable) relation "backtest_results" does not exist
+LINE 6:                     FROM backtest_results
+                                 ^
+
+[SQL: 
+                    SELECT id, symbol, strategy, start_date, end_date, 
+                    initial_capital, final_capital, total_return, 
+                    annualized_return, total_trades, winning_trades, 
+                    win_rate, max_drawdown, sharpe_ratio, parameters, created_at
+                    FROM backtest_results
+                    ORDER BY created_at DESC
+                    LIMIT %(limit)s
+                ]
+[parameters: {'limit': 10}]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+2025-02-26 23:01:53,144 - backtester - ERROR - Error getting backtest results: (psycopg2.errors.UndefinedTable) relation "backtest_results" does not exist
+LINE 6:                     FROM backtest_results
+                                 ^
+
+[SQL: 
+                    SELECT id, symbol, strategy, start_date, end_date, 
+                    initial_capital, final_capital, total_return, 
+                    annualized_return, total_trades, winning_trades, 
+                    win_rate, max_drawdown, sharpe_ratio, parameters, created_at
+                    FROM backtest_results
+                    ORDER BY created_at DESC
+                    LIMIT %(limit)s
+                ]
+[parameters: {'limit': 10}]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+2025-02-26 23:01:57,636 - backtester - ERROR - Error getting historical data: (psycopg2.errors.UndefinedTable) relation "historical_stock_prices" does not exist
+LINE 3:             FROM historical_stock_prices
+                         ^
+
+[SQL: 
+            SELECT timestamp, open, high, low, close, volume
+            FROM historical_stock_prices
+            WHERE symbol = %(symbol)s 
+            AND timestamp BETWEEN %(start_date)s AND %(end_date)s
+            ORDER BY timestamp
+        ]
+[parameters: {'symbol': 'PKO', 'start_date': '2020-02-26', 'end_date': '2025-02-26'}]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+2025-02-26 23:01:57,637 - backtester_api - ERROR - Error in backtest endpoint: 400: No data available for PKO
+2025-02-26 23:01:57,908 - backtester - ERROR - Error getting backtest results: (psycopg2.errors.UndefinedTable) relation "backtest_results" does not exist
+LINE 6:                     FROM backtest_results
+                                 ^
+
+[SQL: 
+                    SELECT id, symbol, strategy, start_date, end_date, 
+                    initial_capital, final_capital, total_return, 
+                    annualized_return, total_trades, winning_trades, 
+                    win_rate, max_drawdown, sharpe_ratio, parameters, created_at
+                    FROM backtest_results
+                    ORDER BY created_at DESC
+                    LIMIT %(limit)s
+                ]
+[parameters: {'limit': 10}]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+2025-02-26 23:02:01,578 - backtester - ERROR - Error getting historical data: (psycopg2.errors.UndefinedTable) relation "historical_stock_prices" does not exist
+LINE 3:             FROM historical_stock_prices
+                         ^
+
+[SQL: 
+            SELECT timestamp, open, high, low, close, volume
+            FROM historical_stock_prices
+            WHERE symbol = %(symbol)s 
+            AND timestamp BETWEEN %(start_date)s AND %(end_date)s
+            ORDER BY timestamp
+        ]
+[parameters: {'symbol': 'PKN', 'start_date': '2020-02-26', 'end_date': '2025-02-26'}]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+2025-02-26 23:02:01,580 - backtester_api - ERROR - Error in backtest endpoint: 400: No data available for PKN
+2025-02-26 23:02:01,924 - backtester - ERROR - Error getting backtest results: (psycopg2.errors.UndefinedTable) relation "backtest_results" does not exist
+LINE 6:                     FROM backtest_results
+                                 ^
+
+[SQL: 
+                    SELECT id, symbol, strategy, start_date, end_date, 
+                    initial_capital, final_capital, total_return, 
+                    annualized_return, total_trades, winning_trades, 
+                    win_rate, max_drawdown, sharpe_ratio, parameters, created_at
+                    FROM backtest_results
+                    ORDER BY created_at DESC
+                    LIMIT %(limit)s
+                ]
+[parameters: {'limit': 10}]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+2025-02-26 23:11:31,927 - backtester - ERROR - Error getting backtest results: (psycopg2.errors.UndefinedTable) relation "backtest_results" does not exist
+LINE 6:                     FROM backtest_results
+                                 ^
+
+[SQL: 
+                    SELECT id, symbol, strategy, start_date, end_date, 
+                    initial_capital, final_capital, total_return, 
+                    annualized_return, total_trades, winning_trades, 
+                    win_rate, max_drawdown, sharpe_ratio, parameters, created_at
+                    FROM backtest_results
+                    ORDER BY created_at DESC
+                    LIMIT %(limit)s
+                ]
+[parameters: {'limit': 10}]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+2025-02-26 23:11:35,643 - backtester - ERROR - Error getting historical data: (psycopg2.errors.UndefinedTable) relation "historical_stock_prices" does not exist
+LINE 3:             FROM historical_stock_prices
+                         ^
+
+[SQL: 
+            SELECT timestamp, open, high, low, close, volume
+            FROM historical_stock_prices
+            WHERE symbol = %(symbol)s 
+            AND timestamp BETWEEN %(start_date)s AND %(end_date)s
+            ORDER BY timestamp
+        ]
+[parameters: {'symbol': 'PKO', 'start_date': '2020-02-26', 'end_date': '2025-02-26'}]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+2025-02-26 23:11:35,644 - backtester_api - ERROR - Error in backtest endpoint: 400: No data available for PKO
+2025-02-26 23:11:36,065 - backtester - ERROR - Error getting backtest results: (psycopg2.errors.UndefinedTable) relation "backtest_results" does not exist
+LINE 6:                     FROM backtest_results
+                                 ^
+
+[SQL: 
+                    SELECT id, symbol, strategy, start_date, end_date, 
+                    initial_capital, final_capital, total_return, 
+                    annualized_return, total_trades, winning_trades, 
+                    win_rate, max_drawdown, sharpe_ratio, parameters, created_at
+                    FROM backtest_results
+                    ORDER BY created_at DESC
+                    LIMIT %(limit)s
+                ]
+[parameters: {'limit': 10}]
+(Background on this error at: https://sqlalche.me/e/20/f405)
