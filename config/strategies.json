@@ -1,0 +1,18 @@
+{
+  "symbols": [
+    "PKO", "PKN", "PZU", "PEO", "DNP", "SPL", "KGH", "LPP", 
+    "ALE", "CPS", "CDR", "MBK", "OPL", "MIL", "KRU", "BDX",
+    "PLY", "JSW", "WPL", "TEN", "CCC", "EAT", "OPF", "MRC"
+  ],
+  "strategies": [
+    {
+      "name": "moving_average",
+      "class": "MovingAverageStrategy",
+      "settings": {
+        "short_ma": 50,
+        "long_ma": 100,
+        "min_volume": 10000
+      }
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+/* Additional styles for the dashboard */
+.logo {
+    max-height: 40px;
+}
+
+.backtest-summary {
+    background-color: #f8f9fa;
+    border-radius: 5px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+.metric-card {
+    border: 1px solid #dee2e6;
+    border-radius: 5px;
+    padding: 10px;
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+.metric-title {
+    font-size: 0.9rem;
+    color: #6c757d;
+}
+
+.metric-value {
+    font-size: 1.2rem;
+    font-weight: bold;
+}
+
+.positive {
+    color: #28a745;
+}
+
+.negative {
+    color: #dc3545;
+}
+
+.neutral {
+    color: #007bff;
+}

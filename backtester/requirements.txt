@@ -1,0 +1,8 @@
+pandas
+numpy
+sqlalchemy
+psycopg2
+fastapi
+uvicorn
+matplotlib
+scikit-learn

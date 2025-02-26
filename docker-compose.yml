@@ -1,0 +1,134 @@
+name: gpw_alert_system
+
+services:
+  database:
+    image: postgres:latest
+    restart: always
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: stocks
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d stocks"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:latest
+    restart: always
+    ports:
+      - "6379:6379"
+
+  data_fetcher:
+    build: ./data_fetcher
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      DB_HOST: database
+      DB_USER: user
+      DB_PASSWORD: password
+      DB_NAME: stocks
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./config:/app/config
+
+  historical_importer:
+    build: ./historical_importer
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      DB_HOST: database
+      DB_USER: user
+      DB_PASSWORD: password
+      DB_NAME: stocks
+    volumes:
+      - ./config:/app/config
+      - ./logs:/app/logs
+
+  strategy_analyzer:
+    build: ./strategy_analyzer
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      DB_HOST: database
+      DB_USER: user
+      DB_PASSWORD: password
+      DB_NAME: stocks
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./config:/app/config
+
+  backtester:
+    build: ./backtester
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      DB_HOST: database
+      DB_USER: user
+      DB_PASSWORD: password
+      DB_NAME: stocks
+    ports:
+      - "8004:8004"
+    volumes:
+      - ./config:/app/config
+      - ./logs:/app/logs
+
+  alert_system:
+    build: ./alert_system
+    depends_on:
+      strategy_analyzer:
+        condition: service_started
+    environment:
+      DB_HOST: database
+      DB_USER: user
+      DB_PASSWORD: password
+      DB_NAME: stocks
+      EMAIL_HOST: smtp.example.com
+      EMAIL_USER: user@example.com
+      EMAIL_PASSWORD: password
+    ports:
+      - "8003:8003"
+
+  dashboard:
+    build: ./dashboard
+    ports:
+      - "8000:8000"
+    depends_on:
+      database:
+        condition: service_healthy
+      strategy_analyzer:
+        condition: service_started
+    environment:
+      DB_HOST: database
+      DB_USER: user
+      DB_PASSWORD: password
+      DB_NAME: stocks
+
+  scheduler:
+    build: ./scheduler
+    depends_on:
+      data_fetcher:
+        condition: service_started
+      strategy_analyzer:
+        condition: service_started
+    environment:
+      REDIS_HOST: redis
+      DB_HOST: database
+      DB_USER: user
+      DB_PASSWORD: password
+      DB_NAME: stocks
+
+volumes:
+  pgdata:

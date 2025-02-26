@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPW Alert System - Backtesting</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/plotly.js@2.18.2/dist/plotly.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding-top: 20px;
+        }
+        .card {
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .card-header {
+            font-weight: bold;
+            background-color: #f8f9fa;
+        }
+        #equityCurveChart {
+            height: 400px;
+        }
+        .positive-return {
+            color: green;
+            font-weight: bold;
+        }
+        .negative-return {
+            color: red;
+            font-weight: bold;
+        }
+        .navbar {
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <nav class="navbar navbar-expand-lg navbar-light bg-light">
+            <div class="container-fluid">
+                <a class="navbar-brand" href="/">GPW Alert System</a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
+                    aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="navbarNav">
+                    <ul class="navbar-nav">
+                        <li class="nav-item">
+                            <a class="nav-link" href="/">Dashboard</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link active" aria-current="page" href="/backtest">Backtesting</a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+
+        <header class="mb-4">
+            <h1 class="text-center">Strategy Backtesting</h1>
+        </header>
+
+        <!-- Success/Error Messages -->
+        <div id="alertMessages">
+            <!-- Messages will be added dynamically -->
+        </div>
+
+        <div class="row">
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">Run New Backtest</div>
+                    <div class="card-body">
+                        <form id="backtestForm" action="/run_backtest" method="post">
+                            <div class="mb-3">
+                                <label for="symbol" class="form-label">Symbol</label>
+                                <select id="symbol" name="symbol" class="form-select" required>
+                                    <option value="">Select a symbol</option>
+                                    {% for symbol in symbols %}
+                                    <option value="{{ symbol }}">{{ symbol }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="strategy" class="form-label">Strategy</label>
+                                <select id="strategy" name="strategy" class="form-select" required>
+                                    <option value="moving_average">Moving Average Crossover</option>
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="start_date" class="form-label">Start Date</label>
+                                <input type="date" id="start_date" name="start_date" class="form-control" required>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="end_date" class="form-label">End Date</label>
+                                <input type="date" id="end_date" name="end_date" class="form-control" required>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Strategy Parameters</label>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <label for="short_ma" class="form-label">Short MA</label>
+                                        <input type="number" id="short_ma" name="short_ma" class="form-control" value="50" min="5" max="200" required>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="long_ma" class="form-label">Long MA</label>
+                                        <input type="number" id="long_ma" name="long_ma" class="form-control" value="100" min="10" max="500" required>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="initial_capital" class="form-label">Initial Capital (PLN)</label>
+                                <input type="number" id="initial_capital" name="initial_capital" class="form-control" value="10000" min="1000" required>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary w-100">Run Backtest</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span>Backtest Results</span>
+                            <select id="resultSymbolFilter" class="form-select form-select-sm" style="width: 120px;">
+                                <option value="">All Symbols</option>
+                                {% for symbol in symbols %}
+                                <option value="{{ symbol }}">{{ symbol }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Symbol</th>
+                                        <th>Strategy</th>
+                                        <th>Period</th>
+                                        <th>Return</th>
+                                        <th>Win Rate</th>
+                                        <th>Trades</th>
+                                        <th>Sharpe</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="backtestResultsTable">
+                                    <tr>
+                                        <td colspan="8" class="text-center">Loading results...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">Equity Curve</div>
+                    <div class="card-body">
+                        <div id="equityCurveChart"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Set default dates
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set default end date to today
+            const today = new Date();
+            const endDateInput = document.getElementById('end_date');
+            endDateInput.value = today.toISOString().split('T')[0];
+            
+            // Set default start date to 5 years ago
+            const startDate = new Date();
+            startDate.setFullYear(today.getFullYear() - 5);
+            const startDateInput = document.getElementById('start_date');
+            startDateInput.value = startDate.toISOString().split('T')[0];
+            
+            // Check for URL parameters for success/error messages
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('success')) {
+                showAlert('Backtest successfully completed!', 'success');
+            }
+            if (urlParams.has('error')) {
+                showAlert('Error: ' + urlParams.get('error'), 'danger');
+            }
+            
+            // Set symbol if provided in URL
+            if (urlParams.has('symbol')) {
+                const symbolSelect = document.getElementById('symbol');
+                symbolSelect.value = urlParams.get('symbol');
+            }
+            
+            // Load initial data
+            fetchBacktestResults();
+        });
+        
+        // Show alerts
+        function showAlert(message, type) {
+            const alertDiv = document.getElementById('alertMessages');
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type} alert-dismissible fade show`;
+            alert.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            `;
+            alertDiv.appendChild(alert);
+            
+            // Auto-dismiss after 5 seconds
+            setTimeout(() => {
+                alert.classList.remove('show');
+                setTimeout(() => alert.remove(), 150);
+            }, 5000);
+        }
+        
+        // Fetch backtest results
+        function fetchBacktestResults() {
+            const symbolFilter = document.getElementById('resultSymbolFilter').value;
+            const url = '/api/backtests' + (symbolFilter ? `?symbol=${symbolFilter}` : '');
+            
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    const resultsTable = document.getElementById('backtestResultsTable');
+                    
+                    if (!data.results || data.results.length === 0) {
+                        resultsTable.innerHTML = '<tr><td colspan="8" class="text-center">No backtest results found</td></tr>';
+                        return;
+                    }
+                    
+                    let html = '';
+                    data.results.forEach(result => {
+                        const returnClass = result.total_return >= 0 ? 'positive-return' : 'negative-return';
+                        const period = `${result.start_date} to ${result.end_date}`;
+                        
+                        html += `
+                            <tr>
+                                <td>${result.symbol}</td>
+                                <td>${result.strategy}</td>
+                                <td>${period}</td>
+                                <td class="${returnClass}">${result.total_return.toFixed(2)}%</td>
+                                <td>${result.win_rate.toFixed(2)}%</td>
+                                <td>${result.total_trades}</td>
+                                <td>${result.sharpe_ratio.toFixed(2)}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-primary view-equity-curve" 
+                                        data-symbol="${result.symbol}"
+                                        data-start="${result.start_date}"
+                                        data-end="${result.end_date}"
+                                        data-short-ma="${result.parameters.short_ma}"
+                                        data-long-ma="${result.parameters.long_ma}"
+                                        data-capital="${result.initial_capital}">
+                                        View
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                    
+                    resultsTable.innerHTML = html;
+                    
+                    // Add event listeners to view buttons
+                    document.querySelectorAll('.view-equity-curve').forEach(button => {
+                        button.addEventListener('click', function() {
+                            const symbol = this.getAttribute('data-symbol');
+                            const startDate = this.getAttribute('data-start');
+                            const endDate = this.getAttribute('data-end');
+                            const shortMa = this.getAttribute('data-short-ma');
+                            const longMa = this.getAttribute('data-long-ma');
+                            const capital = this.getAttribute('data-capital');
+                            
+                            fetchEquityCurve(symbol, startDate, endDate, shortMa, longMa, capital);
+                        });
+                    });
+                })
+                .catch(error => {
+                    console.error('Error fetching backtest results:', error);
+                    document.getElementById('backtestResultsTable').innerHTML = 
+                        '<tr><td colspan="8" class="text-center text-danger">Error loading backtest results</td></tr>';
+                });
+        }
+        
+        // Fetch equity curve data
+        function fetchEquityCurve(symbol, startDate, endDate, shortMa, longMa, initialCapital) {
+            const url = `/api/backtest/equity_curve?symbol=${symbol}&start_date=${startDate}&end_date=${endDate}` +
+                        `&short_ma=${shortMa}&long_ma=${longMa}&initial_capital=${initialCapital}`;
+            
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        showAlert('Error: ' + data.error, 'danger');
+                        return;
+                    }
+                    
+                    const equityCurve = data.equity_curve;
+                    const signals = data.signals;
+                    
+                    if (!equityCurve || equityCurve.length === 0) {
+                        document.getElementById('equityCurveChart').innerHTML = 
+                            '<div class="alert alert-warning">No equity curve data available</div>';
+                        return;
+                    }
+                    
+                    // Prepare data for plotting
+                    const timestamps = equityCurve.map(point => point.timestamp);
+                    const equityValues = equityCurve.map(point => point.portfolio_value);
+                    
+                    // Create buy and sell signal points
+                    const buySignals = signals.filter(s => s.position === 1);
+                    const sellSignals = signals.filter(s => s.position === -1);
+                    
+                    const traces = [
+                        {
+                            x: timestamps,
+                            y: equityValues,
+                            type: 'scatter',
+                            mode: 'lines',
+                            name: 'Portfolio Value',
+                            line: { color: 'blue' }
+                        }
+                    ];
+                    
+                    // Add buy signals if available
+                    if (buySignals.length > 0) {
+                        traces.push({
+                            x: buySignals.map(s => s.timestamp),
+                            y: buySignals.map(s => {
+                                // Find the portfolio value at this timestamp
+                                const matchingPoint = equityCurve.find(e => e.timestamp === s.timestamp);
+                                return matchingPoint ? matchingPoint.portfolio_value : null;
+                            }),
+                            type: 'scatter',
+                            mode: 'markers',
+                            name: 'Buy Signal',
+                            marker: { color: 'green', size: 10, symbol: 'triangle-up' }
+                        });
+                    }
+                    
+                    // Add sell signals if available
+                    if (sellSignals.length > 0) {
+                        traces.push({
+                            x: sellSignals.map(s => s.timestamp),
+                            y: sellSignals.map(s => {
+                                // Find the portfolio value at this timestamp
+                                const matchingPoint = equityCurve.find(e => e.timestamp === s.timestamp);
+                                return matchingPoint ? matchingPoint.portfolio_value : null;
+                            }),
+                            type: 'scatter',
+                            mode: 'markers',
+                            name: 'Sell Signal',
+                            marker: { color: 'red', size: 10, symbol: 'triangle-down' }
+                        });
+                    }
+                    
+                    const layout = {
+                        title: `${symbol} - Equity Curve (${startDate} to ${endDate})`,
+                        xaxis: { title: 'Date' },
+                        yaxis: { title: 'Portfolio Value (PLN)' },
+                        legend: { orientation: 'h', y: 1.1 }
+                    };
+                    
+                    Plotly.newPlot('equityCurveChart', traces, layout);
+                })
+                .catch(error => {
+                    console.error('Error fetching equity curve:', error);
+                    document.getElementById('equityCurveChart').innerHTML = 
+                        '<div class="alert alert-danger">Error loading equity curve data</div>';
+                });
+        }
+        
+        // Filter results by symbol
+        document.getElementById('resultSymbolFilter').addEventListener('change', fetchBacktestResults);
+    </script>
+</body>
+</html>
