@@ -192,3 +192,10 @@ LINE 6:                     FROM backtest_results
 (Background on this error at: https://sqlalche.me/e/20/f405)
 2025-03-07 08:28:30,845 - backtester - INFO - Saved backtest results for DNP (moving_average) with ID 1
 2025-03-07 08:28:31,345 - backtester - ERROR - Error getting backtest results: the JSON object must be str, bytes or bytearray, not dict
+2025-03-13 22:15:41,598 - backtester - ERROR - Error getting backtest results: the JSON object must be str, bytes or bytearray, not dict
+2025-03-13 22:15:49,327 - backtester - INFO - Saved backtest results for MBK (moving_average) with ID 2
+2025-03-13 22:15:49,578 - backtester - ERROR - Error getting backtest results: the JSON object must be str, bytes or bytearray, not dict
+2025-03-13 22:15:54,634 - backtester - ERROR - Error getting backtest results: the JSON object must be str, bytes or bytearray, not dict
+2025-03-13 22:38:04,714 - backtester - ERROR - Error getting backtest results: the JSON object must be str, bytes or bytearray, not dict
+2025-03-13 22:38:15,850 - backtester - INFO - Saved backtest results for LPP (moving_average) with ID 3
+2025-03-13 22:38:16,100 - backtester - ERROR - Error getting backtest results: the JSON object must be str, bytes or bytearray, not dict
