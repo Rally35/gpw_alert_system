@@ -145,3 +145,50 @@ LINE 6:                     FROM backtest_results
                 ]
 [parameters: {'limit': 10}]
 (Background on this error at: https://sqlalche.me/e/20/f405)
+2025-02-27 09:10:13,249 - backtester - ERROR - Error getting backtest results: (psycopg2.errors.UndefinedTable) relation "backtest_results" does not exist
+LINE 6:                     FROM backtest_results
+                                 ^
+
+[SQL: 
+                    SELECT id, symbol, strategy, start_date, end_date, 
+                    initial_capital, final_capital, total_return, 
+                    annualized_return, total_trades, winning_trades, 
+                    win_rate, max_drawdown, sharpe_ratio, parameters, created_at
+                    FROM backtest_results
+                    ORDER BY created_at DESC
+                    LIMIT %(limit)s
+                ]
+[parameters: {'limit': 10}]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+2025-02-27 09:10:29,006 - backtester - ERROR - Error getting backtest results: (psycopg2.errors.UndefinedTable) relation "backtest_results" does not exist
+LINE 6:                     FROM backtest_results
+                                 ^
+
+[SQL: 
+                    SELECT id, symbol, strategy, start_date, end_date, 
+                    initial_capital, final_capital, total_return, 
+                    annualized_return, total_trades, winning_trades, 
+                    win_rate, max_drawdown, sharpe_ratio, parameters, created_at
+                    FROM backtest_results
+                    ORDER BY created_at DESC
+                    LIMIT %(limit)s
+                ]
+[parameters: {'limit': 10}]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+2025-02-27 09:10:35,084 - backtester - ERROR - Error getting backtest results: (psycopg2.errors.UndefinedTable) relation "backtest_results" does not exist
+LINE 6:                     FROM backtest_results
+                                 ^
+
+[SQL: 
+                    SELECT id, symbol, strategy, start_date, end_date, 
+                    initial_capital, final_capital, total_return, 
+                    annualized_return, total_trades, winning_trades, 
+                    win_rate, max_drawdown, sharpe_ratio, parameters, created_at
+                    FROM backtest_results
+                    ORDER BY created_at DESC
+                    LIMIT %(limit)s
+                ]
+[parameters: {'limit': 10}]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+2025-03-07 08:28:30,845 - backtester - INFO - Saved backtest results for DNP (moving_average) with ID 1
+2025-03-07 08:28:31,345 - backtester - ERROR - Error getting backtest results: the JSON object must be str, bytes or bytearray, not dict
