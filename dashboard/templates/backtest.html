@@ -179,18 +179,15 @@
     <script>
         // Set default dates
         document.addEventListener('DOMContentLoaded', function() {
-            // Set default end date to today
             const today = new Date();
             const endDateInput = document.getElementById('end_date');
             endDateInput.value = today.toISOString().split('T')[0];
-            
-            // Set default start date to 5 years ago
+
             const startDate = new Date();
             startDate.setFullYear(today.getFullYear() - 5);
             const startDateInput = document.getElementById('start_date');
             startDateInput.value = startDate.toISOString().split('T')[0];
-            
-            // Check for URL parameters for success/error messages
+
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.has('success')) {
                 showAlert('Backtest successfully completed!', 'success');
@@ -198,14 +195,12 @@
             if (urlParams.has('error')) {
                 showAlert('Error: ' + urlParams.get('error'), 'danger');
             }
-            
-            // Set symbol if provided in URL
+
             if (urlParams.has('symbol')) {
                 const symbolSelect = document.getElementById('symbol');
                 symbolSelect.value = urlParams.get('symbol');
             }
-            
-            // Load initial data
+
             fetchBacktestResults();
         });
         
@@ -219,34 +214,42 @@
                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             `;
             alertDiv.appendChild(alert);
-            
-            // Auto-dismiss after 5 seconds
+
             setTimeout(() => {
                 alert.classList.remove('show');
                 setTimeout(() => alert.remove(), 150);
             }, 5000);
         }
-        
-        // Fetch backtest results
+
         function fetchBacktestResults() {
             const symbolFilter = document.getElementById('resultSymbolFilter').value;
             const url = '/api/backtests' + (symbolFilter ? `?symbol=${symbolFilter}` : '');
-            
+
             fetch(url)
                 .then(response => response.json())
                 .then(data => {
                     const resultsTable = document.getElementById('backtestResultsTable');
-                    
+
                     if (!data.results || data.results.length === 0) {
                         resultsTable.innerHTML = '<tr><td colspan="8" class="text-center">No backtest results found</td></tr>';
                         return;
                     }
-                    
+
                     let html = '';
                     data.results.forEach(result => {
+                        let params = {};
+                        try {
+                            params = typeof result.parameters === 'string'
+                                ? JSON.parse(result.parameters)
+                                : (result.parameters || {});
+                        } catch (e) {
+                            console.error('Error parsing parameters:', e);
+                            params = {};
+                        }
+
                         const returnClass = result.total_return >= 0 ? 'positive-return' : 'negative-return';
                         const period = `${result.start_date} to ${result.end_date}`;
-                        
+
                         html += `
                             <tr>
                                 <td>${result.symbol}</td>
@@ -261,8 +264,8 @@
                                         data-symbol="${result.symbol}"
                                         data-start="${result.start_date}"
                                         data-end="${result.end_date}"
-                                        data-short-ma="${result.parameters.short_ma}"
-                                        data-long-ma="${result.parameters.long_ma}"
+                                        data-short-ma="${params.short_ma || 50}"
+                                        data-long-ma="${params.long_ma || 100}"
                                         data-capital="${result.initial_capital}">
                                         View
                                     </button>
@@ -270,10 +273,9 @@
                             </tr>
                         `;
                     });
-                    
+
                     resultsTable.innerHTML = html;
-                    
-                    // Add event listeners to view buttons
+
                     document.querySelectorAll('.view-equity-curve').forEach(button => {
                         button.addEventListener('click', function() {
                             const symbol = this.getAttribute('data-symbol');
@@ -282,7 +284,7 @@
                             const shortMa = this.getAttribute('data-short-ma');
                             const longMa = this.getAttribute('data-long-ma');
                             const capital = this.getAttribute('data-capital');
-                            
+
                             fetchEquityCurve(symbol, startDate, endDate, shortMa, longMa, capital);
                         });
                     });
@@ -293,8 +295,7 @@
                         '<tr><td colspan="8" class="text-center text-danger">Error loading backtest results</td></tr>';
                 });
         }
-        
-        // Fetch equity curve data
+
         function fetchEquityCurve(symbol, startDate, endDate, shortMa, longMa, initialCapital) {
             const url = `/api/backtest/equity_curve?symbol=${symbol}&start_date=${startDate}&end_date=${endDate}` +
                         `&short_ma=${shortMa}&long_ma=${longMa}&initial_capital=${initialCapital}`;
@@ -315,12 +316,10 @@
                             '<div class="alert alert-warning">No equity curve data available</div>';
                         return;
                     }
-                    
-                    // Prepare data for plotting
+
                     const timestamps = equityCurve.map(point => point.timestamp);
                     const equityValues = equityCurve.map(point => point.portfolio_value);
-                    
-                    // Create buy and sell signal points
+
                     const buySignals = signals.filter(s => s.position === 1);
                     const sellSignals = signals.filter(s => s.position === -1);
                     
@@ -334,13 +333,11 @@
                             line: { color: 'blue' }
                         }
                     ];
-                    
-                    // Add buy signals if available
+
                     if (buySignals.length > 0) {
                         traces.push({
                             x: buySignals.map(s => s.timestamp),
                             y: buySignals.map(s => {
-                                // Find the portfolio value at this timestamp
                                 const matchingPoint = equityCurve.find(e => e.timestamp === s.timestamp);
                                 return matchingPoint ? matchingPoint.portfolio_value : null;
                             }),
@@ -350,13 +347,11 @@
                             marker: { color: 'green', size: 10, symbol: 'triangle-up' }
                         });
                     }
-                    
-                    // Add sell signals if available
+
                     if (sellSignals.length > 0) {
                         traces.push({
                             x: sellSignals.map(s => s.timestamp),
                             y: sellSignals.map(s => {
-                                // Find the portfolio value at this timestamp
                                 const matchingPoint = equityCurve.find(e => e.timestamp === s.timestamp);
                                 return matchingPoint ? matchingPoint.portfolio_value : null;
                             }),
@@ -382,8 +377,7 @@
                         '<div class="alert alert-danger">Error loading equity curve data</div>';
                 });
         }
-        
-        // Filter results by symbol
+
         document.getElementById('resultSymbolFilter').addEventListener('change', fetchBacktestResults);
     </script>
 </body>

@@ -261,7 +261,7 @@ def run_backtest(symbol, strategy, params=None):
 def get_backtest_results(symbol=None, limit=10):
     try:
         engine = get_db_connection()
-        
+
         with engine.connect() as conn:
             if symbol:
                 query = """
@@ -292,9 +292,18 @@ def get_backtest_results(symbol=None, limit=10):
                     text(query),
                     {"limit": limit}
                 )
-            
+
             results = []
             for row in result:
+                # Serialize parameters correctly
+                params_json = row.parameters
+                if isinstance(params_json, dict):
+                    parameters = params_json
+                elif isinstance(params_json, str):
+                    parameters = json.loads(params_json)
+                else:
+                    parameters = {}
+
                 results.append({
                     "id": row.id,
                     "symbol": row.symbol,
@@ -310,10 +319,10 @@ def get_backtest_results(symbol=None, limit=10):
                     "win_rate": float(row.win_rate),
                     "max_drawdown": float(row.max_drawdown),
                     "sharpe_ratio": float(row.sharpe_ratio),
-                    "parameters": json.loads(row.parameters) if row.parameters else {},
+                    "parameters": parameters,
                     "created_at": row.created_at.strftime('%Y-%m-%d %H:%M:%S')
                 })
-                
+
             return results
     except Exception as e:
         logger.error(f"Error getting backtest results: {str(e)}")
