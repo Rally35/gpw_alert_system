@@ -220,129 +220,181 @@
                 });
         }
 
-        // Fetch and display stock data
-function fetchStockData(symbol, days) {
-    console.log('Fetching stock data', { symbol, days });
-    console.log('Plotly object exists:', !!window.Plotly);
-    console.log('Plotly version:', Plotly.version);
+        // Fetch and display stock data - FIXED VERSION
+        function fetchStockData(symbol, days) {
+            // Show loading indicator
+            document.getElementById('stockChart').innerHTML = `
+                <div class="d-flex justify-content-center align-items-center" style="height: 100%">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <span class="ms-2">Loading chart data...</span>
+                </div>
+            `;
 
-    if (!symbol) {
-        console.error('No symbol selected');
-        document.getElementById('stockChart').innerHTML =
-            '<div class="alert alert-warning">Please select a symbol</div>';
-        return;
-    }
-
-    fetch(`/api/stock/${symbol}?days=${days}`)
-        .then(response => {
-            console.log('Fetch response:', response);
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            console.log('Full data object:', data);
-            
-            if (!data || !data.data || data.data.length === 0) {
-                console.warn('No data available for symbol:', symbol);
+            if (!symbol) {
                 document.getElementById('stockChart').innerHTML =
-                    '<div class="alert alert-warning">No data available for this symbol</div>';
+                    '<div class="alert alert-warning">Please select a symbol</div>';
                 return;
             }
 
-            const timestamps = data.data.map(item => item.timestamp);
-            const closes = data.data.map(item => item.close);
-            const ma50s = data.data.map(item => item.ma50);
-            const ma100s = data.data.map(item => item.ma100);
+            fetch(`/api/stock/${symbol}?days=${days}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (!data || !data.data || data.data.length === 0) {
+                        document.getElementById('stockChart').innerHTML =
+                            '<div class="alert alert-warning">No data available for this symbol</div>';
+                        return;
+                    }
 
-            console.log('Timestamps:', timestamps);
-            console.log('Close prices:', closes);
-            console.log('MA50:', ma50s);
-            console.log('MA100:', ma100s);
+                    // Create arrays for plot data
+                    const timestamps = data.data.map(item => new Date(item.timestamp));
+                    const closes = data.data.map(item => item.close);
 
-            const traces = [
-                {
-                    x: timestamps,
-                    y: closes,
-                    type: 'scatter',
-                    mode: 'lines',
-                    name: 'Close Price',
-                    line: { color: 'blue' }
-                }
-            ];
+                    // Filter out null values for MAs before creating traces
+                    const ma50Data = data.data.filter(item => item.ma50 !== null);
+                    const ma100Data = data.data.filter(item => item.ma100 !== null);
 
-            // Add MA50 if available
-            if (ma50s.some(val => val !== null)) {
-                traces.push({
-                    x: timestamps,
-                    y: ma50s,
-                    type: 'scatter',
-                    mode: 'lines',
-                    name: 'MA50',
-                    line: { color: 'orange', dash: 'dot' }
+                    const traces = [
+                        {
+                            x: timestamps,
+                            y: closes,
+                            type: 'scatter',
+                            mode: 'lines',
+                            name: 'Close Price',
+                            line: { color: 'blue', width: 2 }
+                        }
+                    ];
+
+                    // Add MA50 if available
+                    if (ma50Data.length > 0) {
+                        traces.push({
+                            x: ma50Data.map(item => new Date(item.timestamp)),
+                            y: ma50Data.map(item => item.ma50),
+                            type: 'scatter',
+                            mode: 'lines',
+                            name: 'MA50',
+                            line: { color: 'orange', width: 1.5, dash: 'dot' }
+                        });
+                    }
+
+                    // Add MA100 if available
+                    if (ma100Data.length > 0) {
+                        traces.push({
+                            x: ma100Data.map(item => new Date(item.timestamp)),
+                            y: ma100Data.map(item => item.ma100),
+                            type: 'scatter',
+                            mode: 'lines',
+                            name: 'MA100',
+                            line: { color: 'green', width: 1.5, dash: 'dot' }
+                        });
+                    }
+
+                    const layout = {
+                        title: `${symbol} Stock Price`,
+                        titlefont: {
+                            size: 18,
+                            family: 'Segoe UI, sans-serif'
+                        },
+                        autosize: true,
+                        height: 500,
+                        margin: { t: 40, r: 30, l: 60, b: 60 },
+                        xaxis: {
+                            title: 'Date',
+                            gridcolor: '#eee',
+                            zerolinecolor: '#eee'
+                        },
+                        yaxis: {
+                            title: 'Price (PLN)',
+                            gridcolor: '#eee',
+                            zerolinecolor: '#eee'
+                        },
+                        legend: {
+                            orientation: 'h',
+                            y: -0.2
+                        },
+                        plot_bgcolor: '#fff',
+                        paper_bgcolor: '#fff',
+                        hovermode: 'closest'
+                    };
+
+                    const config = {
+                        responsive: true,
+                        displayModeBar: true,
+                        displaylogo: false,
+                        modeBarButtonsToRemove: [
+                            'lasso2d',
+                            'select2d',
+                            'autoScale2d'
+                        ]
+                    };
+
+                    // Clear any previous chart
+                    document.getElementById('stockChart').innerHTML = '';
+
+                    try {
+                        Plotly.newPlot('stockChart', traces, layout, config);
+                    } catch (plotError) {
+                        console.error('Plotly rendering error:', plotError);
+                        document.getElementById('stockChart').innerHTML =
+                            `<div class="alert alert-danger">Error rendering chart: ${plotError.message}</div>`;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading stock data:', error);
+                    document.getElementById('stockChart').innerHTML =
+                        `<div class="alert alert-danger">Error loading stock data: ${error.message}</div>`;
                 });
-            }
-
-            // Add MA100 if available
-            if (ma100s.some(val => val !== null)) {
-                traces.push({
-                    x: timestamps,
-                    y: ma100s,
-                    type: 'scatter',
-                    mode: 'lines',
-                    name: 'MA100',
-                    line: { color: 'green', dash: 'dot' }
-                });
-            }
-
-            const layout = {
-                title: `${symbol} Stock Price`,
-                xaxis: { title: 'Date' },
-                yaxis: { title: 'Price' }
-            };
-
-            try {
-                Plotly.newPlot('stockChart', traces, layout);
-            } catch (plotError) {
-                console.error('Plotly rendering error:', plotError);
-                document.getElementById('stockChart').innerHTML =
-                    `<div class="alert alert-danger">Error rendering chart: ${plotError.message}</div>`;
-            }
-        })
-        .catch(error => {
-            console.error('Complete fetch error:', error);
-            document.getElementById('stockChart').innerHTML =
-                `<div class="alert alert-danger">Error loading stock data: ${error.message}</div>`;
-        });
-}
-
-// Add event listeners when the DOM is fully loaded
-document.addEventListener('DOMContentLoaded', function() {
-    const symbolSelect = document.getElementById('symbolSelect');
-    const daysSelect = document.getElementById('daysSelect');
-
-    // Initial fetch when page loads (optional)
-    if (symbolSelect.value) {
-        fetchStockData(symbolSelect.value, daysSelect.value);
-    }
-
-    // Event listener for symbol change
-    symbolSelect.addEventListener('change', function() {
-        console.log('Symbol selected:', this.value);
-        fetchStockData(this.value, daysSelect.value);
-    });
-
-    // Event listener for days change
-    daysSelect.addEventListener('change', function() {
-        const selectedSymbol = symbolSelect.value;
-        if (selectedSymbol) {
-            console.log('Days changed, refetching for:', selectedSymbol);
-            fetchStockData(selectedSymbol, this.value);
         }
-    });
 
-    // Fetch initial data
-    fetchAlerts();
-    fetchSystemHealth();
-});
+        // Add event listeners when the DOM is fully loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize pointers to form elements
+            const symbolSelect = document.getElementById('symbolSelect');
+            const daysSelect = document.getElementById('daysSelect');
+
+            // Event listener for symbol change
+            symbolSelect.addEventListener('change', function() {
+                if (this.value) {
+                    fetchStockData(this.value, daysSelect.value);
+                } else {
+                    document.getElementById('stockChart').innerHTML =
+                        '<div class="alert alert-warning">Please select a symbol</div>';
+                }
+            });
+
+            // Event listener for days change
+            daysSelect.addEventListener('change', function() {
+                const selectedSymbol = symbolSelect.value;
+                if (selectedSymbol) {
+                    fetchStockData(selectedSymbol, this.value);
+                }
+            });
+
+            // Check if there's a symbol in the URL (for direct linking)
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('symbol')) {
+                const urlSymbol = urlParams.get('symbol');
+                if (urlSymbol) {
+                    // Set the select dropdown value
+                    const option = Array.from(symbolSelect.options).find(opt => opt.value === urlSymbol);
+                    if (option) {
+                        symbolSelect.value = urlSymbol;
+                        // Fetch data for the symbol
+                        fetchStockData(urlSymbol, daysSelect.value);
+                    }
+                }
+            }
+
+            // Fetch initial data
+            fetchAlerts();
+            fetchSystemHealth();
+        });
+    </script>
+</body>
+</html>
