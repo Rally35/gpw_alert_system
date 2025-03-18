@@ -199,3 +199,24 @@ LINE 6:                     FROM backtest_results
 2025-03-13 22:38:04,714 - backtester - ERROR - Error getting backtest results: the JSON object must be str, bytes or bytearray, not dict
 2025-03-13 22:38:15,850 - backtester - INFO - Saved backtest results for LPP (moving_average) with ID 3
 2025-03-13 22:38:16,100 - backtester - ERROR - Error getting backtest results: the JSON object must be str, bytes or bytearray, not dict
+2025-03-13 23:27:03,958 - backtester - INFO - Saved backtest results for PKO (moving_average) with ID 1
+2025-03-13 23:27:04,719 - backtester - ERROR - Error getting backtest results: the JSON object must be str, bytes or bytearray, not dict
+2025-03-13 23:54:34,463 - backtester - INFO - Saved backtest results for PKO (moving_average) with ID 1
+2025-03-13 23:54:34,705 - backtester - ERROR - Error getting backtest results: the JSON object must be str, bytes or bytearray, not dict
+2025-03-18 20:09:27,978 - backtester - INFO - Saved backtest results for TXT (moving_average) with ID 1
+2025-03-18 20:09:28,321 - backtester - ERROR - Error getting backtest results: the JSON object must be str, bytes or bytearray, not dict
+2025-03-18 20:09:37,867 - backtester - INFO - Saved backtest results for TXT (moving_average) with ID 2
+2025-03-18 20:09:38,124 - backtester - ERROR - Error getting backtest results: the JSON object must be str, bytes or bytearray, not dict
+2025-03-18 20:11:13,214 - backtester - INFO - Saved backtest results for TXT (moving_average) with ID 3
+2025-03-18 20:11:13,665 - backtester - ERROR - Error getting backtest results: the JSON object must be str, bytes or bytearray, not dict
+2025-03-18 20:11:20,322 - backtester - ERROR - Error getting backtest results: the JSON object must be str, bytes or bytearray, not dict
+2025-03-18 20:13:09,228 - backtester - INFO - Saved backtest results for TXT (moving_average) with ID 4
+2025-03-18 20:13:09,628 - backtester - ERROR - Error getting backtest results: the JSON object must be str, bytes or bytearray, not dict
+2025-03-18 20:13:37,734 - backtester - INFO - Saved backtest results for TXT (moving_average) with ID 5
+2025-03-18 20:13:38,108 - backtester - ERROR - Error getting backtest results: the JSON object must be str, bytes or bytearray, not dict
+2025-03-18 20:14:12,540 - backtester - INFO - Saved backtest results for TXT (moving_average) with ID 6
+2025-03-18 20:14:12,869 - backtester - ERROR - Error getting backtest results: the JSON object must be str, bytes or bytearray, not dict
+2025-03-18 20:14:46,256 - backtester - ERROR - Error getting backtest results: the JSON object must be str, bytes or bytearray, not dict
+2025-03-18 20:14:46,891 - backtester - ERROR - Error getting backtest results: the JSON object must be str, bytes or bytearray, not dict
+2025-03-18 20:15:27,097 - backtester - ERROR - Error getting backtest results: the JSON object must be str, bytes or bytearray, not dict
+2025-03-18 20:16:10,140 - backtester - ERROR - Error getting backtest results: the JSON object must be str, bytes or bytearray, not dict

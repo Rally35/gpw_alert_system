@@ -56,6 +56,9 @@
                             <a class="nav-link active" aria-current="page" href="/">Dashboard</a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link" href="/uptrends">Uptrend Stocks</a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link" href="/backtest">Backtesting</a>
                         </li>
                     </ul>
@@ -218,47 +221,128 @@
         }
 
         // Fetch and display stock data
-        function fetchStockData(symbol, days) {
-            if (!symbol) return;
+function fetchStockData(symbol, days) {
+    console.log('Fetching stock data', { symbol, days });
+    console.log('Plotly object exists:', !!window.Plotly);
+    console.log('Plotly version:', Plotly.version);
+
+    if (!symbol) {
+        console.error('No symbol selected');
+        document.getElementById('stockChart').innerHTML =
+            '<div class="alert alert-warning">Please select a symbol</div>';
+        return;
+    }
+
+    fetch(`/api/stock/${symbol}?days=${days}`)
+        .then(response => {
+            console.log('Fetch response:', response);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Full data object:', data);
             
-            fetch(`/api/stock/${symbol}?days=${days}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (!data.data || data.data.length === 0) {
-                        document.getElementById('stockChart').innerHTML = 
-                            '<div class="alert alert-warning">No data available for this symbol</div>';
-                        return;
-                    }
-                    
-                    const timestamps = data.data.map(item => item.timestamp);
-                    const closes = data.data.map(item => item.close);
-                    const volumes = data.data.map(item => item.volume);
-                    const ma50s = data.data.map(item => item.ma50);
-                    const ma100s = data.data.map(item => item.ma100);
-                    
-                    const traces = [
-                        {
-                            x: timestamps,
-                            y: closes,
-                            type: 'scatter',
-                            mode: 'lines',
-                            name: 'Close Price',
-                            line: { color: 'blue' }
-                        }
-                    ];
-                    
-                    // Add MA50 if available
-                    if (ma50s.some(val => val !== null)) {
-                        traces.push({
-                            x: timestamps,
-                            y: ma50s,
-                            type: 'scatter',
-                            mode: 'lines',
-                            name: 'MA50',
-                            line: { color: 'orange', dash: 'dot' }
-                        });
-                    }
-                    
-                    // Add MA100 if available
-                    if (ma100s.some(val => val !== null)) {
-                        traces.push({
+            if (!data || !data.data || data.data.length === 0) {
+                console.warn('No data available for symbol:', symbol);
+                document.getElementById('stockChart').innerHTML =
+                    '<div class="alert alert-warning">No data available for this symbol</div>';
+                return;
+            }
+
+            const timestamps = data.data.map(item => item.timestamp);
+            const closes = data.data.map(item => item.close);
+            const ma50s = data.data.map(item => item.ma50);
+            const ma100s = data.data.map(item => item.ma100);
+
+            console.log('Timestamps:', timestamps);
+            console.log('Close prices:', closes);
+            console.log('MA50:', ma50s);
+            console.log('MA100:', ma100s);
+
+            const traces = [
+                {
+                    x: timestamps,
+                    y: closes,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'Close Price',
+                    line: { color: 'blue' }
+                }
+            ];
+
+            // Add MA50 if available
+            if (ma50s.some(val => val !== null)) {
+                traces.push({
+                    x: timestamps,
+                    y: ma50s,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'MA50',
+                    line: { color: 'orange', dash: 'dot' }
+                });
+            }
+
+            // Add MA100 if available
+            if (ma100s.some(val => val !== null)) {
+                traces.push({
+                    x: timestamps,
+                    y: ma100s,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'MA100',
+                    line: { color: 'green', dash: 'dot' }
+                });
+            }
+
+            const layout = {
+                title: `${symbol} Stock Price`,
+                xaxis: { title: 'Date' },
+                yaxis: { title: 'Price' }
+            };
+
+            try {
+                Plotly.newPlot('stockChart', traces, layout);
+            } catch (plotError) {
+                console.error('Plotly rendering error:', plotError);
+                document.getElementById('stockChart').innerHTML =
+                    `<div class="alert alert-danger">Error rendering chart: ${plotError.message}</div>`;
+            }
+        })
+        .catch(error => {
+            console.error('Complete fetch error:', error);
+            document.getElementById('stockChart').innerHTML =
+                `<div class="alert alert-danger">Error loading stock data: ${error.message}</div>`;
+        });
+}
+
+// Add event listeners when the DOM is fully loaded
+document.addEventListener('DOMContentLoaded', function() {
+    const symbolSelect = document.getElementById('symbolSelect');
+    const daysSelect = document.getElementById('daysSelect');
+
+    // Initial fetch when page loads (optional)
+    if (symbolSelect.value) {
+        fetchStockData(symbolSelect.value, daysSelect.value);
+    }
+
+    // Event listener for symbol change
+    symbolSelect.addEventListener('change', function() {
+        console.log('Symbol selected:', this.value);
+        fetchStockData(this.value, daysSelect.value);
+    });
+
+    // Event listener for days change
+    daysSelect.addEventListener('change', function() {
+        const selectedSymbol = symbolSelect.value;
+        if (selectedSymbol) {
+            console.log('Days changed, refetching for:', selectedSymbol);
+            fetchStockData(selectedSymbol, this.value);
+        }
+    });
+
+    // Fetch initial data
+    fetchAlerts();
+    fetchSystemHealth();
+});

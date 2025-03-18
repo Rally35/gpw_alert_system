@@ -179,6 +179,15 @@ async def home(request: Request):
         {"request": request, "symbols": symbols}
     )
 
+@app.get("/uptrends")
+async def uptrends_page(request: Request):
+    symbols = get_symbols()
+    logger.info(f"Rendering uptrends page with {len(symbols)} symbols")
+    return templates.TemplateResponse(
+        "uptrends.html",
+        {"request": request, "symbols": symbols, "min_days": 5}
+    )
+
 @app.get("/backtest")
 async def backtest_page(request: Request):
     symbols = get_symbols()
@@ -278,6 +287,63 @@ async def api_stock_data(symbol: str, days: int = 30):
 async def api_alerts(days: int = 7):
     alerts = get_recent_alerts(days)
     return {"alerts": alerts}
+
+@app.get("/api/uptrends")
+async def api_uptrends(minGain: float = 1.0, minVolume: int = 10000, refresh: bool = False):
+    """Get stocks in an uptrend (gaining for 5 consecutive days)"""
+    engine = get_db_connection()
+    try:
+        # Get all available symbols
+        symbols = get_symbols()
+        uptrend_stocks = []
+
+        for symbol in symbols:
+            # Get last 10 days of data
+            query = f"""
+                SELECT timestamp, close, volume
+                FROM historical_stock_prices
+                WHERE symbol = :symbol
+                ORDER BY timestamp DESC
+                LIMIT 10
+            """
+
+            df = pd.read_sql(text(query), engine, params={"symbol": symbol})
+
+            if len(df) >= 6:  # Need at least 6 days (5 days for returns + 1 base day)
+                # Sort by timestamp ascending for calculation
+                df = df.sort_values('timestamp')
+
+                # Calculate daily returns
+                df['prev_close'] = df['close'].shift(1)
+                df = df.dropna()  # Remove the first row with NaN prev_close
+                df['daily_return'] = (df['close'] - df['prev_close']) / df['prev_close'] * 100
+
+                # Check for 5 consecutive positive days
+                recent_days = df.tail(5)
+                consecutive_gains = all(ret > 0 for ret in recent_days['daily_return'])
+
+                if consecutive_gains:
+                    # Calculate total gain
+                    start_price = df.iloc[-6]['close']  # The price before the 5-day run
+                    end_price = df.iloc[-1]['close']    # The most recent price
+                    total_gain = (end_price / start_price - 1) * 100
+
+                    # Apply minimum gain filter
+                    if total_gain >= minGain and df.iloc[-1]['volume'] >= minVolume:
+                        uptrend_stocks.append({
+                            "symbol": symbol,
+                            "price": float(end_price),
+                            "volume": int(df.iloc[-1]['volume']),
+                            "total_gain": float(total_gain),
+                            "days_up": 5,
+                            "timestamp": df.iloc[-1]['timestamp'].isoformat()
+                        })
+
+        return {"stocks": uptrend_stocks}
+
+    except Exception as e:
+        logger.error(f"Error getting uptrend stocks: {str(e)}")
+        return {"stocks": [], "error": str(e)}
 
 @app.get("/api/backtests")
 async def api_backtests(symbol: str = None):
