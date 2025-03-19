@@ -283,6 +283,174 @@ async def api_stock_data(symbol: str, days: int = 30):
     
     return result
 
+@app.get("/strategies")
+async def strategies_page(request: Request):
+    """Strategy Dashboard page"""
+    symbols = get_symbols()
+    logger.info(f"Rendering strategies page with {len(symbols)} symbols")
+    return templates.TemplateResponse(
+        "strategies.html",
+        {"request": request, "symbols": symbols}
+    )
+
+@app.get("/api/strategies")
+async def api_strategies():
+    """Get all strategies and their configurations"""
+    try:
+        config_path = os.environ.get('CONFIG_PATH', '/app/config/strategies.json')
+        with open(config_path, 'r') as f:
+            strategies_config = json.load(f)
+
+        # Enhance with descriptions
+        strategy_descriptions = {
+            "moving_average": "Generates signals when the short-term moving average crosses above/below the long-term moving average",
+            "consecutive_gains": "Identifies stocks with consecutive daily price gains over a specified period"
+        }
+
+        for strategy in strategies_config.get("strategies", []):
+            strategy["description"] = strategy_descriptions.get(strategy["name"], "No description available")
+
+        return strategies_config
+    except Exception as e:
+        logger.error(f"Error loading strategies: {str(e)}")
+        return {"strategies": [], "error": str(e)}
+
+@app.get("/api/strategy/matches")
+async def api_strategy_matches(strategy_name: str = None):
+    """Get stocks that match or nearly match strategy criteria"""
+    engine = get_db_connection()
+    symbols = get_symbols()
+    results = []
+
+    try:
+        if strategy_name == "moving_average":
+            # Get stocks where MA50 and MA100 are close to crossing
+            for symbol in symbols:
+                query = """
+                    SELECT symbol, timestamp, close,
+                           ma50, ma100, volume,
+                           ABS(ma50 - ma100) as diff,
+                           (ma50 > ma100) as is_bullish
+                    FROM (
+                        SELECT symbol, timestamp, close,
+                               AVG(close) OVER (ORDER BY timestamp ROWS BETWEEN 49 PRECEDING AND CURRENT ROW) as ma50,
+                               AVG(close) OVER (ORDER BY timestamp ROWS BETWEEN 99 PRECEDING AND CURRENT ROW) as ma100,
+                               volume
+                        FROM historical_stock_prices
+                        WHERE symbol = :symbol
+                        ORDER BY timestamp DESC
+                    ) as subquery
+                    WHERE ma50 IS NOT NULL AND ma100 IS NOT NULL
+                    ORDER BY timestamp DESC
+                    LIMIT 1
+                """
+                try:
+                    df = pd.read_sql(text(query), engine, params={"symbol": symbol})
+                    if not df.empty:
+                        record = df.iloc[0].to_dict()
+                        # Check if MAs are within 2% of each other
+                        if record['ma50'] and record['ma100']:
+                            diff_pct = abs(record['diff'] / record['ma100']) * 100
+                            if diff_pct < 2.0:  # Within 2%
+                                results.append({
+                                    "symbol": symbol,
+                                    "price": float(record['close']),
+                                    "ma50": float(record['ma50']),
+                                    "ma100": float(record['ma100']),
+                                    "diff_pct": float(diff_pct),
+                                    "is_bullish": bool(record['is_bullish']),
+                                    "volume": int(record['volume']),
+                                    "match_level": "near" if diff_pct > 0.5 else "match",
+                                    "timestamp": record['timestamp'].isoformat()
+                                })
+                except Exception as e:
+                    logger.error(f"Error processing {symbol}: {str(e)}")
+
+        elif strategy_name == "consecutive_gains":
+            # Get stocks with recent consecutive gains
+            for symbol in symbols:
+                query = """
+                    SELECT symbol, timestamp, close, volume,
+                           lag(close, 1) OVER (ORDER BY timestamp) as prev_close_1,
+                           lag(close, 2) OVER (ORDER BY timestamp) as prev_close_2,
+                           lag(close, 3) OVER (ORDER BY timestamp) as prev_close_3,
+                           lag(close, 4) OVER (ORDER BY timestamp) as prev_close_4
+                    FROM historical_stock_prices
+                    WHERE symbol = :symbol
+                    ORDER BY timestamp DESC
+                    LIMIT 5
+                """
+                try:
+                    df = pd.read_sql(text(query), engine, params={"symbol": symbol})
+                    if len(df) >= 5:
+                        # Sort by timestamp ascending for calculation
+                        df = df.sort_values('timestamp')
+                        # Calculate daily returns
+                        df['daily_return'] = df['close'].pct_change() * 100
+                        df = df.dropna()
+
+                        # Count consecutive positive days
+                        positive_days = sum(1 for ret in df['daily_return'] if ret > 0)
+
+                        # Calculate cumulative gain
+                        start_price = df.iloc[0]['close']
+                        end_price = df.iloc[-1]['close']
+                        total_gain = ((end_price / start_price) - 1) * 100
+
+                        if positive_days >= 3:  # At least 3 consecutive days up
+                            results.append({
+                                "symbol": symbol,
+                                "price": float(end_price),
+                                "positive_days": int(positive_days),
+                                "total_gain": float(total_gain),
+                                "volume": int(df.iloc[-1]['volume']),
+                                "match_level": "match" if positive_days >= 5 else "near",
+                                "timestamp": df.iloc[-1]['timestamp'].isoformat()
+                            })
+                except Exception as e:
+                    logger.error(f"Error processing {symbol}: {str(e)}")
+
+        return {"matches": results}
+    except Exception as e:
+        logger.error(f"Error finding strategy matches: {str(e)}")
+        return {"matches": [], "error": str(e)}
+
+@app.get("/api/strategy/signals")
+async def api_strategy_signals(strategy_name: str = None, days: int = 30):
+    """Get historical signals for a specific strategy"""
+    engine = get_db_connection()
+    try:
+        query = """
+            SELECT id, symbol, strategy, signal_type, price,
+                   volume, ma50, ma100, created_at, status
+            FROM alerts
+            WHERE created_at > NOW() - INTERVAL :days DAY
+            AND strategy = :strategy
+            ORDER BY created_at DESC
+        """
+
+        df = pd.read_sql(text(query), engine, params={"days": days, "strategy": strategy_name})
+        logger.info(f"Retrieved {len(df)} signals for strategy {strategy_name}")
+        return {"signals": df.to_dict(orient='records')}
+    except Exception as e:
+        logger.error(f"Error getting strategy signals: {str(e)}")
+        return {"signals": [], "error": str(e)}
+
+@app.post("/api/strategy/run")
+async def run_strategy_check():
+    """Trigger strategy analysis on-demand"""
+    try:
+        response = requests.get("http://strategy_analyzer:8002/analyze", timeout=60)
+        if response.status_code == 200:
+            logger.info("Strategy analysis triggered successfully")
+            return {"status": "success", "message": "Strategy analysis started. Check back shortly for results."}
+        else:
+            logger.error(f"Strategy analyzer failed: {response.status_code}")
+            return {"status": "error", "message": f"Failed to start analysis: HTTP {response.status_code}"}
+    except Exception as e:
+        logger.error(f"Error triggering strategy analysis: {str(e)}")
+        return {"status": "error", "message": f"Error: {str(e)}"}
+
 @app.get("/api/alerts")
 async def api_alerts(days: int = 7):
     alerts = get_recent_alerts(days)

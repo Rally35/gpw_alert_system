@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPW Alert System - Strategy Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/plotly.js@2.18.2/dist/plotly.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding-top: 20px;
+        }
+        .card {
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .card-header {
+            font-weight: bold;
+            background-color: #f8f9fa;
+        }
+        .strategy-card {
+            margin-bottom: 30px;
+        }
+        .nav-tabs {
+            margin-bottom: 15px;
+        }
+        .parameter-badge {
+            background-color: #e9ecef;
+            padding: 5px 10px;
+            border-radius: 15px;
+            margin-right: 8px;
+            margin-bottom: 8px;
+            display: inline-block;
+        }
+        .match-row {
+            transition: transform 0.1s;
+        }
+        .match-row:hover {
+            background-color: #f5f5f5;
+            transform: translateY(-2px);
+        }
+        .match-badge {
+            font-weight: bold;
+            padding: 5px 10px;
+            border-radius: 10px;
+        }
+        .match-match {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .match-near {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        .buy-signal {
+            color: green;
+            font-weight: bold;
+        }
+        .sell-signal {
+            color: red;
+            font-weight: bold;
+        }
+        .navbar {
+            margin-bottom: 20px;
+        }
+        .progress-tight {
+            height: 8px;
+            margin-top: 5px;
+        }
+        #alertMessage {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1050;
+            max-width: 350px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <nav class="navbar navbar-expand-lg navbar-light bg-light">
+            <div class="container-fluid">
+                <a class="navbar-brand" href="/">GPW Alert System</a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
+                    aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="navbarNav">
+                    <ul class="navbar-nav">
+                        <li class="nav-item">
+                            <a class="nav-link" href="/">Dashboard</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/uptrends">Uptrend Stocks</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link active" aria-current="page" href="/strategies">Strategies</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/backtest">Backtesting</a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+
+        <div id="alertMessage" style="display: none;"></div>
+
+        <header class="mb-4">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1>Strategy Dashboard</h1>
+                <button id="runAnalysisBtn" class="btn btn-primary">
+                    <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                    Run Analysis Now
+                </button>
+            </div>
+            <p class="text-muted">Monitor active trading strategies and stocks matching criteria</p>
+        </header>
+
+        <div id="strategiesContainer">
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p>Loading strategies...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Display notification
+        function showAlert(message, type = 'success') {
+            const alertDiv = document.getElementById('alertMessage');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            `;
+            alertDiv.style.display = 'block';
+
+            setTimeout(() => {
+                const alert = bootstrap.Alert.getOrCreateInstance(alertDiv);
+                alert.close();
+            }, 5000);
+        }
+
+        // Fetch strategies configuration
+        async function fetchStrategies() {
+            try {
+                const response = await fetch('/api/strategies');
+                const data = await response.json();
+
+                if (!data || !data.strategies || data.strategies.length === 0) {
+                    document.getElementById('strategiesContainer').innerHTML = `
+                        <div class="alert alert-warning">
+                            No trading strategies configured. Check your configuration file.
+                        </div>
+                    `;
+                    return;
+                }
+
+                renderStrategies(data.strategies);
+            } catch (error) {
+                console.error('Error fetching strategies:', error);
+                document.getElementById('strategiesContainer').innerHTML = `
+                    <div class="alert alert-danger">
+                        Error loading strategies: ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        // Render strategies UI
+        function renderStrategies(strategies) {
+            const container = document.getElementById('strategiesContainer');
+            let html = '';
+
+            strategies.forEach((strategy, index) => {
+                const strategyName = strategy.name === 'moving_average' ? 'Moving Average Crossover' :
+                                     strategy.name === 'consecutive_gains' ? 'Consecutive Gains' :
+                                     strategy.name;
+
+                html += `
+                    <div class="card strategy-card" id="strategy-${strategy.name}">
+                        <div class="card-header bg-light">
+                            <h3>${strategyName}</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-4">
+                                <h5>Description</h5>
+                                <p>${strategy.description || 'No description available'}</p>
+                            </div>
+
+                            <div class="mb-4">
+                                <h5>Parameters</h5>
+                                <div class="parameter-list">
+                                    ${Object.entries(strategy.settings || {}).map(([key, value]) => `
+                                        <span class="parameter-badge">
+                                            ${key.replace(/_/g, ' ')}: <strong>${value}</strong>
+                                        </span>
+                                    `).join('')}
+                                </div>
+                            </div>
+
+                            <ul class="nav nav-tabs" role="tablist">
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link active" id="matches-tab-${index}" data-bs-toggle="tab"
+                                            data-bs-target="#matches-${index}" type="button" role="tab">
+                                        Matching Stocks
+                                    </button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link" id="signals-tab-${index}" data-bs-toggle="tab"
+                                            data-bs-target="#signals-${index}" type="button" role="tab">
+                                        Recent Signals
+                                    </button>
+                                </li>
+                            </ul>
+
+                            <div class="tab-content">
+                                <div class="tab-pane fade show active" id="matches-${index}" role="tabpanel">
+                                    <div class="text-center py-3 loading-indicator">
+                                        <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                            <span class="visually-hidden">Loading...</span>
+                                        </div>
+                                        <span class="ms-2">Loading matching stocks...</span>
+                                    </div>
+                                    <div class="table-responsive matches-table" style="display:none">
+                                        <table class="table table-hover">
+                                            <thead>
+                                                <!-- Dynamic headers based on strategy -->
+                                            </thead>
+                                            <tbody>
+                                                <!-- Dynamic content -->
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                                <div class="tab-pane fade" id="signals-${index}" role="tabpanel">
+                                    <div class="text-center py-3 loading-indicator">
+                                        <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                            <span class="visually-hidden">Loading...</span>
+                                        </div>
+                                        <span class="ms-2">Loading historical signals...</span>
+                                    </div>
+                                    <div class="table-responsive signals-table" style="display:none">
+                                        <table class="table table-hover">
+                                            <thead>
+                                                <tr>
+                                                    <th>Symbol</th>
+                                                    <th>Signal Type</th>
+                                                    <th>Price</th>
+                                                    <th>Volume</th>
+                                                    <th>Date</th>
+                                                    <th>Status</th>
+                                                    <th>View</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <!-- Dynamic content -->
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+
+            // Load data for each strategy
+            strategies.forEach((strategy, index) => {
+                loadStrategyMatches(strategy.name, index);
+                loadStrategySignals(strategy.name, index);
+
+                // Event listeners for tab changes
+                document.getElementById(`matches-tab-${index}`).addEventListener('click', () => {
+                    loadStrategyMatches(strategy.name, index);
+                });
+
+                document.getElementById(`signals-tab-${index}`).addEventListener('click', () => {
+                    loadStrategySignals(strategy.name, index);
+                });
+            });
+        }
+
+        // Load stocks matching strategy criteria
+        async function loadStrategyMatches(strategyName, index) {
+            const matchesContainer = document.querySelector(`#matches-${index}`);
+            const loadingIndicator = matchesContainer.querySelector('.loading-indicator');
+            const tableContainer = matchesContainer.querySelector('.matches-table');
+
+            loadingIndicator.style.display = 'block';
+            tableContainer.style.display = 'none';
+
+            try {
+                const response = await fetch(`/api/strategy/matches?strategy_name=${strategyName}`);
+                const data = await response.json();
+
+                const matches = data.matches || [];
+                const table = tableContainer.querySelector('table');
+                const thead = table.querySelector('thead');
+                const tbody = table.querySelector('tbody');
+
+                // Different headers based on strategy type
+                if (strategyName === 'moving_average') {
+                    thead.innerHTML = `
+                        <tr>
+                            <th>Symbol</th>
+                            <th>Price</th>
+                            <th>MA50</th>
+                            <th>MA100</th>
+                            <th>Difference</th>
+                            <th>Direction</th>
+                            <th>Volume</th>
+                            <th>Match</th>
+                        </tr>
+                    `;
+
+                    // Sort by diff_pct ascending (closest to crossing first)
+                    matches.sort((a, b) => a.diff_pct - b.diff_pct);
+
+                    tbody.innerHTML = matches.map(match => `
+                        <tr class="match-row">
+                            <td><strong>${match.symbol}</strong></td>
+                            <td>${match.price.toFixed(2)}</td>
+                            <td>${match.ma50.toFixed(2)}</td>
+                            <td>${match.ma100.toFixed(2)}</td>
+                            <td>${match.diff_pct.toFixed(2)}%</td>
+                            <td>${match.is_bullish ?
+                                '<span class="text-success">Bullish</span>' :
+                                '<span class="text-danger">Bearish</span>'}</td>
+                            <td>${match.volume.toLocaleString()}</td>
+                            <td>
+                                <span class="match-badge match-${match.match_level}">
+                                    ${match.match_level === 'match' ? 'Match' : 'Near'}
+                                </span>
+                            </td>
+                        </tr>
+                    `).join('') || '<tr><td colspan="8" class="text-center">No stocks currently matching criteria</td></tr>';
+
+                } else if (strategyName === 'consecutive_gains') {
+                    thead.innerHTML = `
+                        <tr>
+                            <th>Symbol</th>
+                            <th>Price</th>
+                            <th>Positive Days</th>
+                            <th>Total Gain</th>
+                            <th>Volume</th>
+                            <th>Match</th>
+                        </tr>
+                    `;
+
+                    // Sort by positive_days descending, then by total_gain descending
+                    matches.sort((a, b) => {
+                        if (b.positive_days !== a.positive_days) return b.positive_days - a.positive_days;
+                        return b.total_gain - a.total_gain;
+                    });
+
+                    tbody.innerHTML = matches.map(match => `
+                        <tr class="match-row">
+                            <td><strong>${match.symbol}</strong></td>
+                            <td>${match.price.toFixed(2)}</td>
+                            <td>${match.positive_days}</td>
+                            <td>${match.total_gain.toFixed(2)}%</td>
+                            <td>${match.volume.toLocaleString()}</td>
+                            <td>
+                                <span class="match-badge match-${match.match_level}">
+                                    ${match.match_level === 'match' ? 'Match' : 'Near'}
+                                </span>
+                            </td>
+                        </tr>
+                    `).join('') || '<tr><td colspan="6" class="text-center">No stocks currently matching criteria</td></tr>';
+                }
+
+                // Add clicking behavior to rows
+                Array.from(tbody.querySelectorAll('tr')).forEach(row => {
+                    const symbolCell = row.querySelector('td');
+                    if (symbolCell) {
+                        const symbol = symbolCell.textContent.trim();
+                        row.style.cursor = 'pointer';
+                        row.addEventListener('click', () => {
+                            window.location.href = `/?symbol=${symbol}`;
+                        });
+                    }
+                });
+
+            } catch (error) {
+                console.error(`Error loading matches for ${strategyName}:`, error);
+                tableContainer.innerHTML = `
+                    <div class="alert alert-danger">
+                        Error loading matching stocks: ${error.message}
+                    </div>
+                `;
+            } finally {
+                loadingIndicator.style.display = 'none';
+                tableContainer.style.display = 'block';
+            }
+        }
+
+        // Load historical signals for strategy
+        async function loadStrategySignals(strategyName, index) {
+            const signalsContainer = document.querySelector(`#signals-${index}`);
+            const loadingIndicator = signalsContainer.querySelector('.loading-indicator');
+            const tableContainer = signalsContainer.querySelector('.signals-table');
+
+            loadingIndicator.style.display = 'block';
+            tableContainer.style.display = 'none';
+
+            try {
+                const response = await fetch(`/api/strategy/signals?strategy_name=${strategyName}&days=30`);
+                const data = await response.json();
+
+                const signals = data.signals || [];
+                const tbody = tableContainer.querySelector('tbody');
+
+                if (signals.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" class="text-center">No signals generated in the last 30 days</td></tr>';
+                } else {
+                    tbody.innerHTML = signals.map(signal => {
+                        const date = new Date(signal.created_at).toLocaleString();
+                        const signalClass = signal.signal_type === 'BUY' ? 'buy-signal' : 'sell-signal';
+
+                        return `
+                            <tr>
+                                <td><strong>${signal.symbol}</strong></td>
+                                <td class="${signalClass}">${signal.signal_type}</td>
+                                <td>${signal.price.toFixed(2)}</td>
+                                <td>${signal.volume.toLocaleString()}</td>
+                                <td>${date}</td>
+                                <td>${signal.status}</td>
+                                <td>
+                                    <a href="/?symbol=${signal.symbol}" class="btn btn-sm btn-outline-primary">
+                                        Chart
+                                    </a>
+                                </td>
+                            </tr>
+                        `;
+                    }).join('');
+                }
+
+            } catch (error) {
+                console.error(`Error loading signals for ${strategyName}:`, error);
+                tableContainer.innerHTML = `
+                    <div class="alert alert-danger">
+                        Error loading signals: ${error.message}
+                    </div>
+                `;
+            } finally {
+                loadingIndicator.style.display = 'none';
+                tableContainer.style.display = 'block';
+            }
+        }
+
+        // Run strategy analysis on-demand
+        async function runStrategyAnalysis() {
+            const button = document.getElementById('runAnalysisBtn');
+            const spinner = button.querySelector('.spinner-border');
+
+            button.disabled = true;
+            spinner.classList.remove('d-none');
+
+            try {
+                const response = await fetch('/api/strategy/run', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    showAlert(data.message, 'success');
+
+                    // Reload data after a short delay
+                    setTimeout(() => {
+                        const activeStrategies = document.querySelectorAll('.strategy-card');
+                        activeStrategies.forEach((strategyCard, index) => {
+                            const strategyName = strategyCard.id.replace('strategy-', '');
+                            loadStrategyMatches(strategyName, index);
+                            loadStrategySignals(strategyName, index);
+                        });
+                    }, 5000);
+                } else {
+                    showAlert(data.message, 'danger');
+                }
+            } catch (error) {
+                console.error('Error running strategy analysis:', error);
+                showAlert(`Error running analysis: ${error.message}`, 'danger');
+            } finally {
+                button.disabled = false;
+                spinner.classList.add('d-none');
+            }
+        }
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            fetchStrategies();
+
+            // Setup run analysis button
+            document.getElementById('runAnalysisBtn').addEventListener('click', runStrategyAnalysis);
+        });
+    </script>
+</body>
+</html>
