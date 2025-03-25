@@ -4,30 +4,19 @@ services:
     image: postgres:latest
     restart: always
     environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: stocks
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - gpw_data:/var/lib/postgresql/data
       - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user -d stocks"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 10s
       timeout: 5s
       retries: 5
-
-  db-init:
-    image: postgres:latest
-    depends_on:
-      database:
-        condition: service_healthy
-    volumes:
-      - ./database/init.sql:/init.sql
-    command: bash -c "PGPASSWORD=password psql -h database -U user -d stocks -f /init.sql"
-    environment:
-      PGPASSWORD: password
 
   redis:
     image: redis:latest
@@ -40,13 +29,11 @@ services:
     depends_on:
       database:
         condition: service_healthy
-      db-init:
-        condition: service_completed_successfully
     environment:
       DB_HOST: database
-      DB_USER: user
-      DB_PASSWORD: password
-      DB_NAME: stocks
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
     ports:
       - "8001:8001"
     volumes:
@@ -57,8 +44,6 @@ services:
     depends_on:
       database:
         condition: service_healthy
-      db-init:
-        condition: service_completed_successfully
     environment:
       DB_HOST: database
       DB_USER: user
@@ -73,8 +58,6 @@ services:
     depends_on:
       database:
         condition: service_healthy
-      db-init:
-        condition: service_completed_successfully
     environment:
       DB_HOST: database
       DB_USER: user
@@ -85,31 +68,11 @@ services:
     volumes:
       - ./config:/app/config
 
-  backtester:
-    build: ./backtester
-    depends_on:
-      database:
-        condition: service_healthy
-      db-init:
-        condition: service_completed_successfully
-    environment:
-      DB_HOST: database
-      DB_USER: user
-      DB_PASSWORD: password
-      DB_NAME: stocks
-    ports:
-      - "8004:8004"
-    volumes:
-      - ./config:/app/config
-      - ./logs:/app/logs
-
   alert_system:
     build: ./alert_system
     depends_on:
       database:
         condition: service_healthy
-      db-init:
-        condition: service_completed_successfully
       strategy_analyzer:
         condition: service_started
     environment:
@@ -130,8 +93,6 @@ services:
     depends_on:
       database:
         condition: service_healthy
-      db-init:
-        condition: service_completed_successfully
       strategy_analyzer:
         condition: service_started
     environment:
@@ -145,8 +106,6 @@ services:
     depends_on:
       database:
         condition: service_healthy
-      db-init:
-        condition: service_completed_successfully
       data_fetcher:
         condition: service_started
       strategy_analyzer:
@@ -159,4 +118,4 @@ services:
       DB_NAME: stocks
 
 volumes:
-  pgdata:
+  gpw_data:

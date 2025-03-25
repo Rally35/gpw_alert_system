@@ -34,8 +34,8 @@ def load_config():
         logger.warning("Config file not found, using default symbols")
         return {
             "symbols": [
-                "PKO", "PKN", "PZU", "PEO", "DNP", "SPL", "KGH", "LPP", 
-                "ALE", "CPS", "CDR", "MBK", "OPL", "MIL", "KRU", "BDX"
+                "PKO", "PKN", "PZU", "PEO", "DNP", "KGH", "LPP",
+                "ALE", "CDR", "KRU"
             ]
         }
 
@@ -46,11 +46,17 @@ def fetch_stock_data(symbol):
         ticker = f"{symbol}.WA"
         logger.info(f"Fetching data for {ticker}")
         
-        # Get data for the last 2 days with 1h interval
+        # Calculate yesterday's date boundaries
+        yesterday = datetime.now() - timedelta(days=1)
+        start_date = yesterday.strftime('%Y-%m-%d')
+        end_date = (yesterday + timedelta(days=1)).strftime('%Y-%m-%d')
+
+        # Get data for yesterday with 1d interval
         stock_data = yf.download(
             ticker,
-            period="2d",
-            interval="1h",
+            start=start_date,
+            end=end_date,
+            interval="1d",
             progress=False
         )
         
@@ -61,6 +67,10 @@ def fetch_stock_data(symbol):
         # Reset index to make timestamp a column
         stock_data = stock_data.reset_index()
         
+        # Flatten MultiIndex columns if necessary
+        if isinstance(stock_data.columns, pd.MultiIndex):
+            stock_data.columns = [col[0] for col in stock_data.columns]
+
         # Add symbol column
         stock_data['symbol'] = symbol
         
@@ -77,12 +87,12 @@ def save_to_staging(engine, data):
     try:
         # Rename columns to match database schema
         data = data.rename(columns={
-            'Datetime': 'timestamp',
-            'Open': 'open',
-            'High': 'high',
-            'Low': 'low',
-            'Close': 'close',
-            'Volume': 'volume'
+        'Date': 'timestamp',
+        'Open': 'open',
+        'High': 'high',
+        'Low': 'low',
+        'Close': 'close',
+        'Volume': 'volume'
         })
         
         # Select only required columns
@@ -95,34 +105,6 @@ def save_to_staging(engine, data):
     except Exception as e:
         logger.error(f"Error saving data to staging: {str(e)}")
         return 0
-
-# Transfer data from staging to historical table
-def transfer_to_historical(engine):
-    try:
-        with engine.connect() as conn:
-            # Execute SQL to transfer data
-            result = conn.execute(text("""
-                INSERT INTO historical_stock_prices 
-                (symbol, timestamp, open, high, low, close, volume)
-                SELECT symbol, timestamp, open, high, low, close, volume 
-                FROM staging_stock_prices
-                ON CONFLICT (symbol, timestamp) 
-                DO UPDATE SET
-                    open = EXCLUDED.open,
-                    high = EXCLUDED.high,
-                    low = EXCLUDED.low,
-                    close = EXCLUDED.close,
-                    volume = EXCLUDED.volume;
-            """))
-            
-            # Clear staging table
-            conn.execute(text("TRUNCATE TABLE staging_stock_prices;"))
-            conn.commit()
-            
-            logger.info("Data transferred to historical table")
-            
-    except Exception as e:
-        logger.error(f"Error transferring data to historical: {str(e)}")
 
 # Record health status
 def update_health_status(engine, status, details=None):
@@ -170,10 +152,7 @@ def main():
             
             # Sleep to avoid rate limiting
             time.sleep(1)
-        
-        # Transfer data from staging to historical
-        transfer_to_historical(engine)
-        
+
         logger.info(f"Completed data fetch. Processed {total_records} records for {len(symbols)} symbols")
         update_health_status(engine, "OK", f"Processed {total_records} records")
         

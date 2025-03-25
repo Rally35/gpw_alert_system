@@ -42,10 +42,10 @@ async def run_backtest(request: BacktestRequest):
             request.strategy,
             request.parameters
         )
-        
+
         if "error" in results:
             raise HTTPException(status_code=400, detail=results["error"])
-            
+
         return results
     except Exception as e:
         logger.error(f"Error in backtest endpoint: {str(e)}")
@@ -75,24 +75,24 @@ async def get_equity_curve(
     try:
         if not end_date:
             end_date = datetime.now().strftime('%Y-%m-%d')
-            
+
         params = {
             "short_ma": short_ma,
             "long_ma": long_ma,
             "initial_capital": initial_capital
         }
-        
+
         results = backtester.get_backtest_equity_curve(
-            symbol, 
-            start_date, 
-            end_date, 
-            strategy, 
+            symbol,
+            start_date,
+            end_date,
+            strategy,
             params
         )
-        
+
         if "error" in results:
             raise HTTPException(status_code=400, detail=results["error"])
-            
+
         return results
     except Exception as e:
         logger.error(f"Error in equity_curve endpoint: {str(e)}")

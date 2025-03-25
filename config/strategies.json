@@ -1,27 +1,26 @@
 {
-  "symbols": [
-    "PKO", "PKN", "PZU", "PEO", "DNP", "SPL", "KGH", "LPP", 
-    "ALE", "CPS", "CDR", "MBK", "OPL", "MIL", "KRU", "BDX",
-    "PLY", "JSW", "WPL", "TEN", "CCC", "EAT", "OPF", "MRC"
-  ],
-  "strategies": [
-    {
-      "name": "moving_average",
-      "class": "MovingAverageStrategy",
-      "settings": {
-        "short_ma": 50,
-        "long_ma": 100,
-        "min_volume": 10000
-      }
-    },
-    {
-      "name": "consecutive_gains",
-      "class": "ConsecutiveGainsStrategy",
-      "settings": {
-        "min_days": 5,
-        "min_volume": 10000,
-        "min_gain_percent": 0.1
-      }
-    }
-  ]
+    "strategies": [
+        {
+            "name": "moving_average_crossover",
+            "type": "technical",
+            "parameters": {
+                "short_ma": 50,
+                "long_ma": 200,
+                "close_proximity_percent": 2.0
+            }
+        },
+        {
+            "name": "consecutive_gains",
+            "type": "trend",
+            "parameters": {
+                "consecutive_days": 3,
+                "minimum_gain_percent": 1.5,
+                "minimum_volume": 100000
+            }
+        }
+    ],
+    "symbols": [
+        "PKO", "PKN", "PZU", "PEO", "KGH", "LPP",
+        "CDR", "OPL", "JSW", "CCC"
+    ]
 }
