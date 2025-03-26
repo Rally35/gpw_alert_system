@@ -31,12 +31,17 @@ def load_config():
         with open(config_path, 'r') as f:
             return json.load(f)
     except FileNotFoundError:
-        logger.warning("Config file not found, using default symbols")
-        return {
-            "symbols": [
-                "PKO", "PKN", "PZU", "PEO", "KGH", "LPP"
-            ]
-        }
+        logger.warning("Config file not found")
+        return None
+
+def clear_staging_table(engine):
+    """Clear the staging table before importing new data."""
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("TRUNCATE TABLE staging_stock_prices;"))
+            logger.info("Cleared staging_stock_prices table.")
+    except Exception as e:
+        logger.error(f"Error clearing staging table: {str(e)}")
 
 def fetch_historical_data(symbol, years=5):
     try:
@@ -67,34 +72,31 @@ def fetch_historical_data(symbol, years=5):
         return None
 
 def insert_stock_data(engine, symbol, data):
-    """Insert stock data directly using SQL"""
+    """Insert stock data directly using SQL without handling duplicates,
+       as the staging table is cleared before each run.
+    """
     if data is None or data.empty:
         return 0
     
     try:
         count = 0
-        with engine.connect() as conn:
+        # Use a transaction block that automatically commits
+        with engine.begin() as conn:
             for index, row in data.iterrows():
                 # Extract the date and values
                 date = index.strftime('%Y-%m-%d')
-                open_price = float(row['Open'])
-                high_price = float(row['High'])
-                low_price = float(row['Low'])
-                close_price = float(row['Close'])
-                volume = int(row['Volume'])
+                # Use .item() to extract a scalar from a single-element Series if necessary
+                open_price = float(row['Open'].item() if hasattr(row['Open'], 'item') else row['Open'])
+                high_price = float(row['High'].item() if hasattr(row['High'], 'item') else row['High'])
+                low_price = float(row['Low'].item() if hasattr(row['Low'], 'item') else row['Low'])
+                close_price = float(row['Close'].item() if hasattr(row['Close'], 'item') else row['Close'])
+                volume = int(row['Volume'].item() if hasattr(row['Volume'], 'item') else row['Volume'])
                 
-                # Insert directly with SQL
+                # Insert directly with SQL (no ON CONFLICT since table is cleared)
                 query = """
-                INSERT INTO historical_stock_prices 
+                INSERT INTO staging_stock_prices
                 (symbol, timestamp, open, high, low, close, volume)
                 VALUES (:symbol, :timestamp, :open, :high, :low, :close, :volume)
-                ON CONFLICT (symbol, timestamp) 
-                DO UPDATE SET
-                    open = EXCLUDED.open,
-                    high = EXCLUDED.high,
-                    low = EXCLUDED.low,
-                    close = EXCLUDED.close,
-                    volume = EXCLUDED.volume
                 """
                 
                 conn.execute(
@@ -110,13 +112,30 @@ def insert_stock_data(engine, symbol, data):
                     }
                 )
                 count += 1
-                
-            conn.commit()
+
             logger.info(f"Inserted {count} records for {symbol}")
         return count
     except Exception as e:
         logger.error(f"Error inserting data for {symbol}: {str(e)}")
         return 0
+
+def update_health_status(engine, status, details=None):
+    """Update the system_health table with the current status of the historical importer."""
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text("""
+                    INSERT INTO system_health (component, status, details)
+                    VALUES (:component, :status, :details)
+                """),
+                {
+                    "component": "historical_importer",
+                    "status": status,
+                    "details": details
+                }
+            )
+    except Exception as e:
+        logger.error(f"Failed to update health status: {str(e)}")
 
 def main():
     logger.info("Starting historical data import")
@@ -125,12 +144,20 @@ def main():
         # Get database connection
         engine = get_db_connection()
         
+        # Clear the staging table first
+        clear_staging_table(engine)
+
         # Load configuration
         config = load_config()
-        symbols = config.get("symbols", [])
+        if config is None:
+            logger.error("Configuration could not be loaded")
+            update_health_status(engine, "ERROR", "Configuration could not be loaded")
+            return
         
+        symbols = config.get("symbols", [])
         if not symbols:
             logger.error("No symbols configured")
+            update_health_status(engine, "ERROR", "No symbols configured")
             return
         
         # Get number of years to import
@@ -139,47 +166,26 @@ def main():
         
         total_records = 0
         
-        # Create a test record for each symbol
+        # Process each symbol
         for symbol in symbols:
             try:
-                # First try fetching actual data
                 data = fetch_historical_data(symbol, years)
                 if data is not None and not data.empty:
                     records = insert_stock_data(engine, symbol, data)
                     total_records += records
                 else:
-                    # If no data, insert a test record
-                    with engine.connect() as conn:
-                        date = datetime.now().strftime('%Y-%m-%d')
-                        conn.execute(
-                            text("""
-                            INSERT INTO historical_stock_prices 
-                            (symbol, timestamp, open, high, low, close, volume)
-                            VALUES (:symbol, :timestamp, :open, :high, :low, :close, :volume)
-                            ON CONFLICT DO NOTHING
-                            """),
-                            {
-                                "symbol": symbol,
-                                "timestamp": date,
-                                "open": 100.0,
-                                "high": 105.0,
-                                "low": 95.0,
-                                "close": 102.0,
-                                "volume": 10000
-                            }
-                        )
-                        conn.commit()
-                        logger.info(f"Inserted test record for {symbol}")
-                        total_records += 1
+                    logger.info(f"Failed to insert data for {symbol}")
             except Exception as e:
                 logger.error(f"Failed to process {symbol}: {str(e)}")
             
             time.sleep(1)  # Avoid rate limiting
         
         logger.info(f"Completed historical data import. Processed {total_records} records for {len(symbols)} symbols")
+        update_health_status(engine, "OK", f"Processed {total_records} records")
         
     except Exception as e:
         logger.error(f"Error in main process: {str(e)}")
+        update_health_status(engine, "ERROR", str(e))
 
 if __name__ == "__main__":
     main()

@@ -56,3 +56,22 @@ CREATE TABLE IF NOT EXISTS system_health (
     last_check TIMESTAMP(0) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     details TEXT
 );
+
+-- Create or replace the trigger function
+CREATE OR REPLACE FUNCTION staging_to_historical_trigger_fn()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO historical_stock_prices (symbol, timestamp, open, high, low, close, volume)
+    VALUES (NEW.symbol, NEW.timestamp, NEW.open, NEW.high, NEW.low, NEW.close, NEW.volume)
+    ON CONFLICT (symbol, timestamp) DO NOTHING;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create the trigger on the staging table to fire after every INSERT or UPDATE
+CREATE TRIGGER staging_to_historical_trigger
+AFTER INSERT OR UPDATE ON staging_stock_prices
+FOR EACH ROW
+EXECUTE FUNCTION staging_to_historical_trigger_fn();
+

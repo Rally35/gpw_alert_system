@@ -39,6 +39,15 @@ def load_config():
             ]
         }
 
+def clear_staging_table(engine):
+    """Clear the staging table before importing new data."""
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("TRUNCATE TABLE staging_stock_prices;"))
+            logger.info("Cleared staging_stock_prices table.")
+    except Exception as e:
+        logger.error(f"Error clearing staging table: {str(e)}")
+
 # Fetch data from Yahoo Finance
 def fetch_stock_data(symbol):
     try:
@@ -133,6 +142,9 @@ def main():
         # Get database connection
         engine = get_db_connection()
         
+        # Clear the staging table first
+        clear_staging_table(engine)
+
         # Load configuration
         config = load_config()
         symbols = config.get("symbols", [])
