@@ -31,9 +31,6 @@ services:
         condition: service_healthy
     environment:
       DB_HOST: database
-      DB_USER: ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
-      DB_NAME: ${DB_NAME}
     ports:
       - "8001:8001"
     volumes:
@@ -47,9 +44,6 @@ services:
         condition: service_healthy
     environment:
       DB_HOST: database
-      DB_USER: user
-      DB_PASSWORD: password
-      DB_NAME: stocks
     volumes:
       - ./config:/app/config
       - ./logs:/app/logs
@@ -61,9 +55,6 @@ services:
         condition: service_healthy
     environment:
       DB_HOST: database
-      DB_USER: user
-      DB_PASSWORD: password
-      DB_NAME: stocks
     ports:
       - "8002:8002"
     volumes:
@@ -98,9 +89,9 @@ services:
         condition: service_started
     environment:
       DB_HOST: database
-      DB_USER: user
-      DB_PASSWORD: password
-      DB_NAME: stocks
+    volumes:
+      - ./config:/app/config
+
 
   scheduler:
     build: ./scheduler
@@ -113,10 +104,9 @@ services:
         condition: service_started
     environment:
       REDIS_HOST: redis
-      DB_HOST: database
-      DB_USER: user
-      DB_PASSWORD: password
-      DB_NAME: stocks
+    command: celery -A tasks worker --beat --loglevel=info
+    volumes:
+      - ./config:/app/config
 
 volumes:
   gpw_data:

@@ -23,48 +23,44 @@ def get_db_connection():
     connection_string = f"postgresql://{db_user}:{db_password}@{db_host}/{db_name}"
     return create_engine(connection_string)
 
-# Load configuration
-def load_config():
+# Load strategies configuration from strategies.json
+def load_strategies_config():
     try:
-        config_path = os.environ.get('CONFIG_PATH', '/app/config/strategies.json')
+        config_path = os.environ.get('STRATEGIES_CONFIG_PATH', '/app/config/strategies.json')
         with open(config_path, 'r') as f:
-            return json.load(f)
+            config = json.load(f)
+            return config
     except FileNotFoundError:
-        logger.warning("Config file not found, using default strategies")
-        return {
-            "symbols": [
-                "PKO", "PKN", "PZU", "PEO", "DNP", "SPL", "KGH", "LPP", 
-                "ALE", "CPS", "CDR", "MBK", "OPL", "MIL", "KRU", "BDX"
-            ],
-            "strategies": [
-                {
-                    "name": "moving_average",
-                    "class": "MovingAverageStrategy",
-                    "settings": {
-                        "short_ma": 50,
-                        "long_ma": 100,
-                        "min_volume": 10000
-                    }
-                }
-            ]
-        }
+        logger.error("Strategies configuration file not found at /app/config/strategies.json. Please ensure the file is present.")
+        return None
 
-# Load strategy modules dynamically
-def load_strategies(engine, config):
+# Load symbols configuration from symbols.json
+def load_symbols_config():
+    try:
+        config_path = os.environ.get('SYMBOLS_CONFIG_PATH', '/app/config/symbols.json')
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+            symbols = config.get("symbols", [])
+            return symbols
+    except FileNotFoundError:
+        logger.error("Symbols configuration file not found at /app/config/symbols.json. Please ensure the file is present.")
+        return []
+
+# Dynamically load strategy modules based on the strategies configuration
+def load_strategies(engine, strategies_config):
     strategies = []
-    
-    for strategy_config in config.get("strategies", []):
+    for strategy_config in strategies_config.get("strategies", []):
         try:
             module_name = f"strategies.{strategy_config['name']}"
             class_name = strategy_config["class"]
             
-            # Import the module
+            # Import the module dynamically
             module = importlib.import_module(module_name)
             
             # Get the strategy class
             strategy_class = getattr(module, class_name)
             
-            # Create instance
+            # Create an instance of the strategy, passing the database engine and settings
             strategy = strategy_class(engine, strategy_config.get("settings"))
             strategies.append(strategy)
             
@@ -75,11 +71,26 @@ def load_strategies(engine, config):
     
     return strategies
 
-# Save signal to database
+# Save generated signal into the alerts table
 def save_signal(engine, signal):
     try:
+        # Define common fields for the alerts table
+        common_fields = {
+            "symbol": signal.get("symbol"),
+            "strategy": signal.get("strategy"),
+            "signal_type": signal.get("signal_type"),
+            "price": float(signal.get("price"))
+        }
+        # Extract additional details from the signal (e.g., stop_loss, target, conditions_met, etc.)
+        details = signal.get("details", {})
+        details.update({
+            "stop_loss": float(signal.get("stop_loss")),
+            "target": float(signal.get("target")),
+            "conditions_met": signal.get("conditions_met")
+        })
+
         with engine.connect() as conn:
-            # Check if this signal was already generated recently
+            # Check if a similar signal was already generated in the last 24 hours
             result = conn.execute(
                 text("""
                     SELECT id FROM alerts
@@ -89,32 +100,31 @@ def save_signal(engine, signal):
                     AND created_at > NOW() - INTERVAL '24 hours'
                     LIMIT 1
                 """),
-                signal
+                common_fields
             )
-            
-            existing = result.fetchone()
-            if existing:
-                logger.info(f"Signal already exists for {signal['symbol']} ({signal['strategy']})")
+            if result.fetchone():
+                logger.info(f"Signal already exists for {common_fields['symbol']} ({common_fields['strategy']})")
                 return
             
-            # Insert new signal
+            # Insert new signal, converting numpy types using the default function
             conn.execute(
                 text("""
                     INSERT INTO alerts
-                    (symbol, strategy, signal_type, price, volume, ma50, ma100, status)
+                    (symbol, strategy, signal_type, price, details, status)
                     VALUES
-                    (:symbol, :strategy, :signal_type, :price, :volume, :ma50, :ma100, 'PENDING')
+                    (:symbol, :strategy, :signal_type, :price, :details, 'PENDING')
                 """),
-                signal
+                {
+                    **common_fields,
+                    "details": json.dumps(details, default=lambda o: o.item() if hasattr(o, "item") else o)
+                }
             )
             conn.commit()
-            
-            logger.info(f"Saved new {signal['signal_type']} signal for {signal['symbol']} ({signal['strategy']})")
-            
+            logger.info(f"Saved new {common_fields['signal_type']} signal for {common_fields['symbol']} ({common_fields['strategy']})")
     except Exception as e:
         logger.error(f"Error saving signal: {str(e)}")
 
-# Record health status
+# Update the system health status in the database
 def update_health_status(engine, status, details=None):
     try:
         with engine.connect() as conn:
@@ -133,26 +143,29 @@ def update_health_status(engine, status, details=None):
     except Exception as e:
         logger.error(f"Failed to update health status: {str(e)}")
 
-# Main function
 def main():
     logger.info("Starting strategy analyzer")
     
     try:
-        # Get database connection
+        # Establish database connection
         engine = get_db_connection()
         
-        # Load configuration
-        config = load_config()
-        symbols = config.get("symbols", [])
-        
-        if not symbols:
-            logger.error("No symbols configured")
-            update_health_status(engine, "ERROR", "No symbols configured")
+        # Load strategies configuration from strategies.json
+        strategies_config = load_strategies_config()
+        if strategies_config is None:
+            logger.error("Strategies configuration did not load. Aborting strategy analysis.")
+            update_health_status(engine, "ERROR", "Strategies configuration did not load from /app/config/strategies.json")
             return
         
-        # Load strategy modules
-        strategies = load_strategies(engine, config)
+        # Load symbols configuration from symbols.json
+        symbols = load_symbols_config()
+        if not symbols:
+            logger.error("No symbols loaded from /app/config/symbols.json. Aborting analysis.")
+            update_health_status(engine, "ERROR", "No symbols provided in /app/config/symbols.json")
+            return
         
+        # Load strategy modules dynamically
+        strategies = load_strategies(engine, strategies_config)
         if not strategies:
             logger.error("No strategies loaded")
             update_health_status(engine, "ERROR", "No strategies loaded")
@@ -164,7 +177,6 @@ def main():
         for symbol in symbols:
             for strategy in strategies:
                 signal = strategy.analyze(symbol)
-                
                 if signal:
                     save_signal(engine, signal)
                     signal_count += 1

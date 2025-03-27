@@ -33,19 +33,17 @@ CREATE TABLE IF NOT EXISTS historical_stock_prices (
 CREATE INDEX IF NOT EXISTS idx_historical_symbol ON historical_stock_prices(symbol);
 CREATE INDEX IF NOT EXISTS idx_historical_timestamp ON historical_stock_prices(timestamp);
 
--- Alerts history table
+-- Alerts history table with JSONB for extra details
 CREATE TABLE IF NOT EXISTS alerts (
     id SERIAL PRIMARY KEY,
     symbol VARCHAR(20) NOT NULL,
     strategy VARCHAR(50) NOT NULL,
     signal_type VARCHAR(10) NOT NULL,
     price DECIMAL(10, 2) NOT NULL,
-    volume BIGINT,
-    ma50 DECIMAL(10, 2),
-    ma100 DECIMAL(10, 2),
     created_at TIMESTAMP(0) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     sent_at TIMESTAMP,
-    status VARCHAR(20) DEFAULT 'PENDING'
+    status VARCHAR(20) DEFAULT 'PENDING',
+    details JSONB
 );
 
 -- System health monitoring table

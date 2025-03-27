@@ -1,26 +1,20 @@
 {
-    "strategies": [
-        {
-            "name": "moving_average_crossover",
-            "type": "technical",
-            "parameters": {
-                "short_ma": 50,
-                "long_ma": 200,
-                "close_proximity_percent": 2.0
-            }
-        },
-        {
-            "name": "consecutive_gains",
-            "type": "trend",
-            "parameters": {
-                "consecutive_days": 3,
-                "minimum_gain_percent": 1.5,
-                "minimum_volume": 100000
-            }
-        }
-    ],
-    "symbols": [
-        "PKO", "PKN", "PZU", "PEO", "KGH", "LPP",
-        "CDR", "OPL", "JSW", "CCC"
-    ]
+  "strategies": [
+    {
+      "name": "momentum_trend_breakout",
+      "class": "MomentumTrendBreakoutStrategy",
+      "settings": {
+        "trend_period": 5,
+        "momentum_period": 14,
+        "min_volume_multiplier": 1.2,
+        "rsi_threshold": 50,
+        "macd_fast": 12,
+        "macd_slow": 26,
+        "macd_signal": 9,
+        "min_conditions": 2,
+        "risk_reward_ratio": 3,
+        "atr_multiplier": 1.5
+      }
+    }
+  ]
 }
