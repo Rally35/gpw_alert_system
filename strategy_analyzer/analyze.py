@@ -74,23 +74,26 @@ def load_strategies(engine, strategies_config):
 # Save generated signal into the alerts table
 def save_signal(engine, signal):
     try:
-        # Define common fields for the alerts table
         common_fields = {
             "symbol": signal.get("symbol"),
             "strategy": signal.get("strategy"),
             "signal_type": signal.get("signal_type"),
             "price": float(signal.get("price"))
         }
-        # Extract additional details from the signal (e.g., stop_loss, target, conditions_met, etc.)
         details = signal.get("details", {})
         details.update({
             "stop_loss": float(signal.get("stop_loss")),
             "target": float(signal.get("target")),
             "conditions_met": signal.get("conditions_met")
         })
+        status = signal.get("status", "PENDING")
 
         with engine.connect() as conn:
-            # Check if a similar signal was already generated in the last 24 hours
+            # Optionally, you can decide to update or delete previous WATCH signals here.
+            # For example, delete all WATCH signals before saving new ones:
+            if status == "WATCH":
+                conn.execute(text("DELETE FROM alerts WHERE status = 'WATCH'"))
+
             result = conn.execute(
                 text("""
                     SELECT id FROM alerts
@@ -105,18 +108,18 @@ def save_signal(engine, signal):
             if result.fetchone():
                 logger.info(f"Signal already exists for {common_fields['symbol']} ({common_fields['strategy']})")
                 return
-            
-            # Insert new signal, converting numpy types using the default function
+
             conn.execute(
                 text("""
                     INSERT INTO alerts
                     (symbol, strategy, signal_type, price, details, status)
                     VALUES
-                    (:symbol, :strategy, :signal_type, :price, :details, 'PENDING')
+                    (:symbol, :strategy, :signal_type, :price, :details, :status)
                 """),
                 {
                     **common_fields,
-                    "details": json.dumps(details, default=lambda o: o.item() if hasattr(o, "item") else o)
+                    "details": json.dumps(details, default=lambda o: o.item() if hasattr(o, "item") else o),
+                    "status": status
                 }
             )
             conn.commit()

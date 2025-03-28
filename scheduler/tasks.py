@@ -117,11 +117,11 @@ app.conf.beat_schedule = {
     },
     'analyze-strategies-hourly': {
         'task': 'tasks.run_strategy_analyzer',
-        'schedule': crontab(minute=10),  # Every hour at 10 minutes past
+        'schedule': crontab(hour='*/6', minute=0),  # Every 6 hours
     },
     'send-alerts-hourly': {
         'task': 'tasks.run_alert_system',
-        'schedule': crontab(minute=20),  # Every hour at 20 minutes past
+        'schedule': crontab(hour='*/6', minute=0),  # Every 2 hours
     },
 }
 

@@ -86,7 +86,7 @@ class MomentumTrendBreakoutStrategy:
                 SELECT timestamp, open, high, low, close, volume
                 FROM historical_stock_prices
                 WHERE symbol = :symbol
-                ORDER BY timestamp ASC
+                ORDER BY timestamp DESC
                 LIMIT :limit
             """)
             df = pd.read_sql(query, self.engine, params={"symbol": symbol, "limit": days})
@@ -164,9 +164,19 @@ class MomentumTrendBreakoutStrategy:
         stop_loss = current_price - (self.settings["atr_multiplier"] * current_atr) if current_atr > 0 else current_price * 0.98
         target = current_price + self.settings["risk_reward_ratio"] * (current_price - stop_loss)
 
+        # Decide on signal type based on conditions_met
+        if conditions_met >= 3:
+            signal_type = "ENTRY"
+            status = "ALERT"
+        elif conditions_met == 2:
+            signal_type = "WATCH"
+            status = "WATCH"
+        else:
+            return None
+
         signal = {
             "symbol": symbol,
-            "signal_type": "ENTRY",
+            "signal_type": signal_type,
             "strategy": self.name,
             "price": current_price,
             "stop_loss": stop_loss,
@@ -182,7 +192,8 @@ class MomentumTrendBreakoutStrategy:
                 "breakout": breakout,
                 "atr": current_atr,
                 "turnover": turnover
-            }
+            },
+            "status": status  # Include the status here
         }
         logger.info(f"{symbol}: Signal generated: {signal}")
         return signal
