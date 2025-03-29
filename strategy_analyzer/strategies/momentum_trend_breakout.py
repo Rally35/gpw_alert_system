@@ -99,21 +99,18 @@ class MomentumTrendBreakoutStrategy:
 
     def analyze(self, symbol):
         """
-        Analyze the given symbol and return a signal if conditions are met.
-        Otherwise, return None.
+        Analizuje spółkę i zwraca sygnał, jeśli warunki są spełnione.
+        Zwraca sygnał typu WATCH, jeśli spełniono 2 kryteria,
+        oraz sygnał ALERT (ENTRY) gdy spełniono 3 lub więcej kryteriów.
         """
-        # Get a sufficient amount of historical data (e.g., 30 days)
         df = self.get_historical_data(symbol, days=30)
         if df.empty or len(df) < self.settings["trend_period"]:
             logger.warning(f"Not enough data for {symbol}")
             return None
 
         df = df.sort_values('timestamp').reset_index(drop=True)
-
-        # Calculate 5-day SMA of closing prices
         df['sma5'] = self.calculate_sma(df['close'], self.settings["trend_period"])
 
-        # Check uptrend condition: require that for the last 2 days, closing > sma5.
         if len(df) < 2:
             return None
         uptrend = (df['close'].iloc[-1] > df['sma5'].iloc[-1]) and (df['close'].iloc[-2] > df['sma5'].iloc[-2])
@@ -121,58 +118,50 @@ class MomentumTrendBreakoutStrategy:
             logger.info(f"{symbol}: Uptrend condition not met")
             return None
 
-        # Calculate current price from the latest closing price
         current_price = df['close'].iloc[-1]
-        # New mandatory condition: Daily turnover (volume * price) must be above 500,000 PLN.
         turnover = df['volume'].iloc[-1] * current_price
         if turnover < 500000:
-            logger.info(f"{symbol}: Daily turnover {turnover:.2f} PLN is below the required threshold of 500,000 PLN")
+            logger.info(f"{symbol}: Daily turnover {turnover:.2f} PLN is below threshold")
             return None
 
         conditions_met = 0
-
-        # Condition 1: Relative Volume condition
         avg_volume = df['volume'].rolling(window=self.settings["trend_period"]).mean().iloc[-1]
         if df['volume'].iloc[-1] >= self.settings["min_volume_multiplier"] * avg_volume:
             conditions_met += 1
 
-        # Condition 2: RSI condition
         rsi = self.calculate_rsi(df['close'], self.settings["momentum_period"])
         if not rsi.empty and rsi.iloc[-1] > self.settings["rsi_threshold"]:
             conditions_met += 1
 
-        # Condition 3: MACD bullish crossover condition
         macd_line, signal_line = self.calculate_macd(df['close'])
         if len(macd_line) >= 2:
             if macd_line.iloc[-2] <= signal_line.iloc[-2] and macd_line.iloc[-1] > signal_line.iloc[-1]:
                 conditions_met += 1
 
-        # Condition 4: Breakout condition - current close equals maximum of last 5 days
         recent_max = df['close'].rolling(window=self.settings["trend_period"]).max().iloc[-1]
         breakout = df['close'].iloc[-1] >= recent_max
         if breakout:
             conditions_met += 1
 
         logger.info(f"{symbol}: Additional conditions met: {conditions_met}")
-        if conditions_met < self.settings["min_conditions"]:
-            logger.info(f"{symbol}: Not enough additional conditions met (required {self.settings['min_conditions']})")
-            return None
 
-        atr_series = self.calculate_atr(df, self.settings["momentum_period"])
-        current_atr = atr_series.iloc[-1] if not atr_series.empty else 0
-
-        stop_loss = current_price - (self.settings["atr_multiplier"] * current_atr) if current_atr > 0 else current_price * 0.98
-        target = current_price + self.settings["risk_reward_ratio"] * (current_price - stop_loss)
-
-        # Decide on signal type based on conditions_met
+        # Ustal typ sygnału i status na podstawie liczby spełnionych warunków.
         if conditions_met >= 3:
-            signal_type = "ENTRY"
+            signal_type = "ALERT"
             status = "ALERT"
         elif conditions_met == 2:
             signal_type = "WATCH"
             status = "WATCH"
         else:
             return None
+
+        # Oblicz trigger_entry jako maksymalną cenę z ostatnich 5 dni
+        trigger_entry = df['close'].rolling(window=self.settings["trend_period"]).max().iloc[-1]
+
+        atr_series = self.calculate_atr(df, self.settings["momentum_period"])
+        current_atr = atr_series.iloc[-1] if not atr_series.empty else 0
+        stop_loss = current_price - (self.settings["atr_multiplier"] * current_atr) if current_atr > 0 else current_price * 0.98
+        target = current_price + self.settings["risk_reward_ratio"] * (current_price - stop_loss)
 
         signal = {
             "symbol": symbol,
@@ -182,6 +171,7 @@ class MomentumTrendBreakoutStrategy:
             "stop_loss": stop_loss,
             "target": target,
             "conditions_met": conditions_met,
+            "status": status,
             "details": {
                 "uptrend": True,
                 "volume": df['volume'].iloc[-1],
@@ -191,9 +181,9 @@ class MomentumTrendBreakoutStrategy:
                 "macd_signal": signal_line.iloc[-1],
                 "breakout": breakout,
                 "atr": current_atr,
-                "turnover": turnover
-            },
-            "status": status  # Include the status here
+                "turnover": turnover,
+                "trigger_entry": trigger_entry
+            }
         }
         logger.info(f"{symbol}: Signal generated: {signal}")
         return signal

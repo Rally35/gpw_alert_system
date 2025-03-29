@@ -89,8 +89,7 @@ def save_signal(engine, signal):
         status = signal.get("status", "PENDING")
 
         with engine.connect() as conn:
-            # Optionally, you can decide to update or delete previous WATCH signals here.
-            # For example, delete all WATCH signals before saving new ones:
+            # Dla WATCH sygnałów czyścimy stare zapisy, aby dashboard widział tylko bieżące obserwacje.
             if status == "WATCH":
                 conn.execute(text("DELETE FROM alerts WHERE status = 'WATCH'"))
 

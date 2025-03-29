@@ -55,6 +55,18 @@ CREATE TABLE IF NOT EXISTS system_health (
     details TEXT
 );
 
+CREATE TABLE IF NOT EXISTS positions (
+    id SERIAL PRIMARY KEY,
+    symbol VARCHAR(20) NOT NULL,
+    strategy VARCHAR(50) NOT NULL,
+    entry_price DECIMAL(10,2) NOT NULL,
+    stop_loss DECIMAL(10,2) NOT NULL,
+    target DECIMAL(10,2) NOT NULL,
+    entry_time TIMESTAMP(0) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    status VARCHAR(20) DEFAULT 'OTWARTA',
+    details JSONB
+);
+
 -- Create or replace the trigger function
 CREATE OR REPLACE FUNCTION staging_to_historical_trigger_fn()
 RETURNS TRIGGER AS $$
