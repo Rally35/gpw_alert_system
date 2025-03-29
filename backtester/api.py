@@ -5,7 +5,7 @@ import json
 import logging
 import os
 from datetime import datetime, timedelta
-import backtester
+import backtest
 
 # Create logs directory if it doesn't exist
 os.makedirs("/app/logs", exist_ok=True)
@@ -37,7 +37,7 @@ async def health_check():
 async def run_backtest(request: BacktestRequest):
     """Run a backtest for a specific symbol and strategy"""
     try:
-        results = backtester.run_backtest(
+        results = backtest.run_backtest(
             request.symbol,
             request.strategy,
             request.parameters
@@ -55,7 +55,7 @@ async def run_backtest(request: BacktestRequest):
 async def get_results(symbol: Optional[str] = None, limit: int = 10):
     """Get backtest results for a specific symbol or all symbols"""
     try:
-        results = backtester.get_backtest_results(symbol, limit)
+        results = backtest.get_backtest_results(symbol, limit)
         return {"results": results}
     except Exception as e:
         logger.error(f"Error in results endpoint: {str(e)}")
@@ -82,7 +82,7 @@ async def get_equity_curve(
             "initial_capital": initial_capital
         }
 
-        results = backtester.get_backtest_equity_curve(
+        results = backtest.get_backtest_equity_curve(
             symbol,
             start_date,
             end_date,

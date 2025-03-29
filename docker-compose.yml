@@ -92,6 +92,23 @@ services:
     volumes:
       - ./config:/app/config
 
+  backtester:
+    build: ./backtester
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      DB_HOST: database
+      DB_USER: user
+      DB_PASSWORD: password
+      DB_NAME: stocks
+    ports:
+      - "8004:8004"
+    volumes:
+      - ./config:/app/config
+      - ./logs:/app/logs
+      - ./strategies:/app/strategy_analyzer/strategies
+
 
   scheduler:
     build: ./scheduler
