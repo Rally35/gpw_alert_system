@@ -99,15 +99,13 @@ services:
         condition: service_healthy
     environment:
       DB_HOST: database
-      DB_USER: user
-      DB_PASSWORD: password
-      DB_NAME: stocks
+      PYTHONPATH: "/app"
     ports:
       - "8004:8004"
     volumes:
       - ./config:/app/config
       - ./logs:/app/logs
-      - ./strategies:/app/strategy_analyzer/strategies
+      - ./strategy_analyzer:/app/strategy_analyzer
 
 
   scheduler:

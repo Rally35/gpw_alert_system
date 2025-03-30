@@ -7,7 +7,6 @@ from sqlalchemy import create_engine, text
 from strategy_analyzer.strategies.momentum_trend_breakout import MomentumTrendBreakoutStrategy
 
 
-
 logger = logging.getLogger('backtest')
 logging.basicConfig(
     level=logging.INFO,
@@ -23,7 +22,7 @@ def get_db_connection():
     return create_engine(connection_string)
 
 def fetch_full_history(engine, symbol):
-    """Pobiera pełne dane historyczne dla danego symbolu z bazy."""
+    """Fetch all historical price data for the given symbol from the database."""
     try:
         query = text("""
             SELECT timestamp, open, high, low, close, volume
@@ -41,90 +40,152 @@ def fetch_full_history(engine, symbol):
 
 def run_backtest(engine, symbol, strategy_params=None):
     """
-    Przeprowadza backtesting dla danego symbolu.
-    Iteruje po dniach i symuluje działanie strategii.
-    Zwraca listę sygnałów z dodatkową informacją o dacie, dla której sygnał został wygenerowany.
+    Perform backtesting for the specified symbol, actually "opening" positions
+    and tracking them day-by-day until stop-loss or target is reached.
+
+    Returns a list of closed positions with final P&L.
     """
     df = fetch_full_history(engine, symbol)
     if df.empty:
+        logger.warning(f"No data for {symbol}")
         return []
     if len(df) < 200:
-        logger.warning(f"Not enough data for {symbol}: {len(df)} dni")
+        logger.warning(f"Not enough data for {symbol}: {len(df)} days")
         return []
 
-    signals = []
-    min_days = 5  # minimalny okres analizy
+    # Ensure chronological order
+    df = df.sort_values("timestamp").reset_index(drop=True)
 
     strategy = MomentumTrendBreakoutStrategy(engine, settings=strategy_params)
+    min_days = strategy_params.get("trend_period", 5)  # minimum lookback period
 
-    # Symulujemy backtesting: dla każdego dnia (od min_days do końca danych)
-    for i in range(min_days, len(df)):
-        window = df.iloc[:i].copy()
-        if len(window) < min_days:
-            continue
-        # Nadpisujemy metodę get_historical_data, by symulować, że mamy tylko dane do tego dnia
-        strategy.get_historical_data = lambda symbol, days=30, window=window: window
+    open_positions = []
+    closed_positions = []
 
+    # Go through each day from min_days to the end minus 1
+    # so we can open a position at "day i+1" if there's a signal on "day i".
+    for i in range(min_days, len(df) - 1):
+        # Data up to current day i (simulate we only know info up to day i)
+        window = df.iloc[:i+1].copy()
+
+        # Override get_historical_data so strategy only sees data up to this day
+        strategy.get_historical_data = lambda sym, days=30, window=window: window
+
+        # 1) Check if there's a new signal on day i
         signal = strategy.analyze(symbol)
         if signal:
-            signal["backtest_date"] = window["timestamp"].iloc[-1]
-            signals.append(signal)
+            # "Open" a position at next day's open (day i+1), if available
+            entry_index = i + 1
+            entry_date = df["timestamp"].iloc[entry_index]
+            entry_price = df["open"].iloc[entry_index]
+            open_positions.append({
+                "symbol": symbol,
+                "signal_type": signal["signal_type"],
+                "signal_date": df["timestamp"].iloc[i],
+                "entry_date": entry_date,
+                "entry_index": entry_index,
+                "entry_price": entry_price,
+                "stop_loss": signal["stop_loss"],
+                "target": signal["target"],
+                "conditions_met": signal["conditions_met"],
+                "exit_date": None,
+                "exit_index": None,
+                "exit_price": None,
+                "profit": None,  # will fill when closed
+            })
 
-    return signals
+        # 2) For each open position, check if day i hits stop-loss or target
+        # We do this check using day i’s high/low to see if it crosses either level
+        today_high = df["high"].iloc[i]
+        today_low = df["low"].iloc[i]
+        today_date = df["timestamp"].iloc[i]
 
-def backtest_report(signals):
-    if not signals:
-        logger.info("No signals generated during backtesting.")
+        for pos in open_positions[:]:
+            # Ensure we don't close on or before the day we opened
+            # If i < pos["entry_index"], skip (haven't reached opening day yet)
+            if i < pos["entry_index"]:
+                continue
+
+            stop_loss = pos["stop_loss"]
+            target = pos["target"]
+
+            # Check if stop-loss triggered
+            stop_hit = (today_low <= stop_loss <= today_high)
+            # Check if target triggered
+            target_hit = (today_low <= target <= today_high)
+
+            # If both could happen the same day, decide which triggers first
+            # (you might need intraday logic or define your own priority).
+            if stop_hit and target_hit:
+                # Suppose we say whichever is closer to the open is triggered first, etc.
+                # For simplicity, let's assume stop-loss triggers first if it is below the open.
+                # We'll use day i's open to guess "who got hit first"
+                day_open = df["open"].iloc[i]
+                dist_stop = abs(day_open - stop_loss)
+                dist_target = abs(day_open - target)
+                if dist_stop < dist_target:
+                    stop_hit = True
+                    target_hit = False
+                else:
+                    stop_hit = False
+                    target_hit = True
+
+            if stop_hit:
+                pos["exit_date"] = today_date
+                pos["exit_index"] = i
+                pos["exit_price"] = stop_loss
+                pos["profit"] = stop_loss - pos["entry_price"]
+                closed_positions.append(pos)
+                open_positions.remove(pos)
+
+            elif target_hit:
+                pos["exit_date"] = today_date
+                pos["exit_index"] = i
+                pos["exit_price"] = target
+                pos["profit"] = target - pos["entry_price"]
+                closed_positions.append(pos)
+                open_positions.remove(pos)
+
+    return closed_positions
+
+def backtest_report(closed_positions):
+    """
+    Summarizes the performance of all closed positions:
+    - total trades
+    - number of wins vs. losses
+    - average gain/loss
+    - simple win rate
+    """
+    if not closed_positions:
+        logger.info("No closed positions. No trades triggered or none reached stop/target.")
         return
 
-    report_data = []
-    wins = 0
-    losses = 0
-    for s in signals:
-        entry = s["price"]
-        target = s["target"]
-        stop_loss = s["stop_loss"]
-
-        profit_pct = ((target - entry) / entry) * 100
-        loss_pct = ((entry - stop_loss) / entry) * 100
-
-        # Symulacja: jeśli potencjalny zysk jest większy niż potencjalna strata, uznajemy transakcję za "wygraną"
-        if profit_pct > loss_pct:
-            wins += 1
-        else:
-            losses += 1
-
-        report_data.append({
-            "symbol": s["symbol"],
-            "backtest_date": s.get("backtest_date"),
-            "signal_type": s["signal_type"],
-            "entry": entry,
-            "target": target,
-            "stop_loss": stop_loss,
-            "profit_pct": profit_pct,
-            "loss_pct": loss_pct,
-            "conditions_met": s["conditions_met"]
-        })
-
-    df_report = pd.DataFrame(report_data)
-    logger.info("Backtest Report:")
-    logger.info(df_report)
+    df_report = pd.DataFrame(closed_positions)
+    # Calculate percentage change from entry to exit
+    df_report["pct_change"] = (df_report["exit_price"] - df_report["entry_price"]) / df_report["entry_price"] * 100
 
     total_trades = len(df_report)
-    avg_profit = df_report["profit_pct"].mean() if total_trades > 0 else 0
-    avg_loss = df_report["loss_pct"].mean() if total_trades > 0 else 0
-    risk_reward = avg_profit / avg_loss if avg_loss != 0 else np.nan
-    win_rate = (wins / total_trades) * 100 if total_trades > 0 else 0
+    wins = df_report[df_report["profit"] > 0]
+    losses = df_report[df_report["profit"] <= 0]
 
-    logger.info(f"Total trades: {total_trades}")
-    logger.info(f"Average potential profit (%): {avg_profit:.2f}")
-    logger.info(f"Average potential loss (%): {avg_loss:.2f}")
-    logger.info(f"Average Risk/Reward Ratio: {risk_reward:.2f}")
+    avg_gain = wins["pct_change"].mean() if not wins.empty else 0.0
+    avg_loss = losses["pct_change"].mean() if not losses.empty else 0.0
+    win_rate = len(wins) / total_trades * 100.0
+
+    logger.info("===== Backtest Results =====")
+    logger.info(f"Total closed trades: {total_trades}")
+    logger.info(f"Wins: {len(wins)} | Losses: {len(losses)}")
     logger.info(f"Win rate: {win_rate:.2f}%")
+    logger.info(f"Average gain (wins only): {avg_gain:.2f}%")
+    logger.info(f"Average loss (losses only): {avg_loss:.2f}%")
+    logger.info(f"Overall average change: {df_report['pct_change'].mean():.2f}%")
+
+    # Optional: show a few rows of results
+    logger.info(df_report)
 
 if __name__ == "__main__":
     engine = get_db_connection()
-    symbol = "PKO"  # Przykładowy symbol – możesz testować również inne
+    symbol = "PKO"  # Example
     strategy_params = {
         "trend_period": 5,
         "momentum_period": 14,
@@ -137,6 +198,7 @@ if __name__ == "__main__":
         "risk_reward_ratio": 3,
         "atr_multiplier": 1.5,
     }
-    signals = run_backtest(engine, symbol, strategy_params)
-    logger.info(f"Backtest for {symbol} generated {len(signals)} signals")
-    backtest_report(signals)
+    # Run the enhanced backtest that opens/closes real positions
+    closed_positions = run_backtest(engine, symbol, strategy_params)
+    logger.info(f"Backtest for {symbol} returned {len(closed_positions)} closed trades.")
+    backtest_report(closed_positions)
